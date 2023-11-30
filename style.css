@@ -90,3 +90,12 @@ ul:last-child {
 	padding: 0 .5em;
 	border-radius: .5em;
 }
+
+/* Coqueligot-specific styles */
+.toggle.hidden {
+  opacity: 0.2;
+}
+
+.toggle.hidden:hover {
+    opacity: 0.5;
+}

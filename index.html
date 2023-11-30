@@ -71,6 +71,19 @@ Inductive storage_state :=
 | Sold       : nat -> storage_state.
       </pre>
 
+<div class="toggle hidden">
+<pre class="code">
+Record t_metadata := {
+  end_date : nat
+}.
+
+Record storage := {
+  state : storage_state;
+  metadata : t_metadata
+}.
+</pre>
+</div>
+
     Also, people can either bid or claim, which leads to the transaction type being :
     <pre class="code">
 Inductive param :=
@@ -94,6 +107,44 @@ Inductive param :=
     </ul>
 
     This behaviour is directly translated by the contract's main function :
+    <div class="toggle hidden">
+      <pre class="code">
+(* Simple auction contract *)
+
+(* Require Coq built-ins, declare LIGO built-ins and shorthands *)
+Require Import Notations.
+Require Import List.
+Require Import Nat.
+Import ListNotations.
+Notation "()" := tt.                (* tt means "null" or "Unit" in Coq *)
+Parameter tez : Type.
+Parameter operation : Type.             (* declare external LIGO type "operation" *)
+(*
+Definition operation : Type.        (* type operation = … *)
+(* could substitute with an actual implementation of operation as e.g. a string of bytes. *)
+exact (list nat).
+Qed. (* make it opaque. *)
+*)
+Parameter contract : Type -> Type.
+Parameter destination_account : contract unit.
+Parameter transaction : forall {param : Type} (action : param) (amount : tez), contract param -> operation.
+Parameter lit_mutez : nat -> tez.
+
+(* Declare external LIGO function "fail_in_main". Note that it should only be
+    used once at the top-level of the "main" wrapper function. This is due to the
+    fact that Coq does not support exceptions or partial functions, so it must be
+    absolutely clear that the behaviour of failure is identical to a no-op contract.
+    See the explanation below in the section about extraction. *)
+Definition fail_in_main {A} (a : A) := a.
+
+(* TODO: make this the current date. (run_multiple_calls will need a source of unknown values (e.g. delays between blocks)) *)
+Definition Tezos_get_time := 999.
+
+Definition has_permission_to_claim (metadata : t_metadata) : bool :=
+  (* dummy placeholder check *)
+  Nat.ltb metadata.(end_date) Tezos_get_time.
+</pre>
+</div>
     <pre class="code">
 (* Behaviour of the contract. *)
 Definition main_option (ps : param * storage) : option ((list operation) * storage) :=
@@ -105,7 +156,7 @@ Definition main_option (ps : param * storage) : option ((list operation) * stora
 
   (* New bid (must be higher than the existing *)
   | (Bid newAmount, {| state := CurrentBid existingAmount; metadata := metadata |})  =>
-    if existingAmount <? newAmount then
+    if existingAmount &lt;? newAmount then
       Some ([], {| state := CurrentBid newAmount; metadata := metadata |})
     else
       None
@@ -118,7 +169,7 @@ Definition main_option (ps : param * storage) : option ((list operation) * stora
     else
       None
     (* All other cases are errors. *)
-  | (_,             _storage)                  =>
+  | (_,             _storage)                  =&gt;
     None
   end.
     </pre>
