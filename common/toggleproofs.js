@@ -22,7 +22,7 @@ function hideAll(cls)
   }
 }
 
-$(document).ready(function () {
+$(function () {
     hideAll('proofscript');
 });
 

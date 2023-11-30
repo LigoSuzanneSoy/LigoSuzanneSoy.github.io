@@ -14,7 +14,7 @@ function jsCoqInject() {
 var jsCoqShow = location.search === '?jscoq=on' ||
                 location.search !== '?jscoq=off' && localStorage.jsCoqShow === 'true';
 
-var jscoq_ids  = ['#main > div.code, #main > div.HIDEFROMHTML > div.code'];
+var jscoq_ids  = ['pre.code, div.HIDEFROMHTML > pre.code'];
 var jscoq_opts = {
     layout:    'flex',
     show:      jsCoqShow,
@@ -30,7 +30,7 @@ var jscoq_opts = {
 
 async function jsCoqLoad() {
     // - remove empty code fragments (coqdoc generates some spurious ones)
-    $('#main > div.code').each(function() {
+    $('pre.code').each(function() {
         if ($(this).text().match(/^\s*$/)) $(this).remove();
     });
 
