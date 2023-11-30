@@ -1,0 +1,3 @@
+[submodule "coqueligot-auction-simple"]
+	path = coqueligot-auction-simple
+	url = https://gitlab.com/ligolang/coqueligot-auction.git
