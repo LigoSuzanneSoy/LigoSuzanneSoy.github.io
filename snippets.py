@@ -28,8 +28,6 @@ for line in s.split('\n'):
         if snippet == '':
           raise Exception('Coq file must start with a (* SNIPPET = ... *) directive')
         snippets[snippet].append(line)
-        #with open('snippets/' + snippet, mode='w') as f:
-        #    f.write(line)
 
 with open('snippets.js', mode='w') as f:
   f.write(json.dumps({'snippets':snippets, 'order':snippetOrder}, indent=2))
@@ -48,7 +46,7 @@ with open('index.html', mode='w') as out:
       snippet = s.group(3)
       out.write(newline + indentation + '<pre ' + attributes + 'id="snippet-' + snippet + '">')
       for l in snippets[snippet]:
-          out.write(newline + l)
+          out.write(newline + htmlspecialchars(l))
       skipping = True
       injected[snippet] = True
     if re.search('.*</pre>.*', htmline):
