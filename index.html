@@ -64,19 +64,19 @@
     </dl>
 
     So the type of the state will be :
-<pre class="code" id="snippet-contract-type-storage">
+    <pre class="code" id="snippet-contract-type-storage">
 (* Declare enum for the storage (three states) *)
 Inductive storage :=
 | Available  : storage
 | CurrentBid : nat -&gt; storage
 | Sold       : nat -&gt; storage.
 
-</pre>
+    </pre>
 
-<div class="toggle hidden">
-<pre class="code" id="snippet-contract-type-metadata">
-</pre>
-</div>
+    <div class="toggle hidden">
+      <pre class="code" id="snippet-contract-type-metadata">
+      </pre>
+    </div>
 
     Also, people can either bid or claim, which leads to the transaction type being :
     <pre class="code" id="snippet-contract-type-param">
@@ -85,7 +85,7 @@ Inductive param :=
 | Bid   : nat -&gt; param
 | Claim : param.
 
-      </pre>
+    </pre>
 
     
     Now, when the smart contract receives a transaction, 4 things can happen :
@@ -137,8 +137,8 @@ Definition fail_in_main {A} (a : A) := a.
 (*                    Contract                   *)
 (* ********************************************* *)
 
-</pre>
-</div>
+      </pre>
+    </div>
     <pre class="code" id="snippet-contract-main-option">
 (* Behaviour of the contract. *)
 Definition main_option (ps : param * storage) : option ((list operation) * storage) :=
@@ -187,15 +187,13 @@ Definition main (ps : param * storage) : (list operation * storage) :=
       properties with Coqueligot.
 
     <p>Finally, we declare what should be the initial storage of the contract when deployed.</p>
-      <div class="toggle hidden">
-      <pre class="code" id="snippet-contract-initial-storage">
+    <pre class="code" id="snippet-contract-initial-storage">
 Definition initial_storage := Available.
 
 (* ********************************************* *)
 (*                End of Contract                *)
 (* ********************************************* *)
-      </pre>
-      </div>
+    </pre>
   </section>
   <section>
     <h1>Specification</h1>

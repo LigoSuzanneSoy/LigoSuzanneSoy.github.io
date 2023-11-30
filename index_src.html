@@ -64,34 +64,17 @@
     </dl>
 
     So the type of the state will be :
-<pre class="code" id="snippet-contract-type-storage">
-(* Declare enum for the storage (three states) *)
-Inductive storage :=
-| Available  : storage
-| CurrentBid : nat -> storage
-| Sold       : nat -> storage.
+    <pre class="code" id="snippet-contract-type-storage">
+    </pre>
 
-</pre>
-
-<div class="toggle hidden">
-<pre class="code" id="snippet-contract-type-metadata">
-Record t_metadata := {
-  end_date : nat
-}.
-
-Record storage := {
-  state : storage_state;
-  metadata : t_metadata
-}.
-</pre>
-</div>
+    <div class="toggle hidden">
+      <pre class="code" id="snippet-contract-type-metadata">
+      </pre>
+    </div>
 
     Also, people can either bid or claim, which leads to the transaction type being :
     <pre class="code" id="snippet-contract-type-param">
-Inductive param :=
-| Bid   : nat -> param
-| Claim : param.
-      </pre>
+    </pre>
 
     
     Now, when the smart contract receives a transaction, 4 things can happen :
@@ -111,69 +94,9 @@ Inductive param :=
     This behaviour is directly translated by the contract's main function :
     <div class="toggle hidden">
       <pre class="code" id="snippet-contract-boilerplate-header">
-(* Simple auction contract *)
-
-(* Require Coq built-ins, declare LIGO built-ins and shorthands *)
-Require Import Notations.
-Require Import List.
-Require Import Nat.
-Import ListNotations.
-Notation "()" := tt.                (* tt means "null" or "Unit" in Coq *)
-Parameter tez : Type.
-Parameter operation : Type.             (* declare external LIGO type "operation" *)
-(*
-Definition operation : Type.        (* type operation = … *)
-(* could substitute with an actual implementation of operation as e.g. a string of bytes. *)
-exact (list nat).
-Qed. (* make it opaque. *)
-*)
-Parameter contract : Type -> Type.
-Parameter destination_account : contract unit.
-Parameter transaction : forall {param : Type} (action : param) (amount : tez), contract param -> operation.
-Parameter lit_mutez : nat -> tez.
-
-(* Declare external LIGO function "fail_in_main". Note that it should only be
-    used once at the top-level of the "main" wrapper function. This is due to the
-    fact that Coq does not support exceptions or partial functions, so it must be
-    absolutely clear that the behaviour of failure is identical to a no-op contract.
-    See the explanation below in the section about extraction. *)
-Definition fail_in_main {A} (a : A) := a.
-
-(* TODO: make this the current date. (run_multiple_calls will need a source of unknown values (e.g. delays between blocks)) *)
-Definition Tezos_get_time := 999.
-
-Definition has_permission_to_claim (metadata : t_metadata) : bool :=
-  (* dummy placeholder check *)
-  Nat.ltb metadata.(end_date) Tezos_get_time.
-</pre>
-</div>
+      </pre>
+    </div>
     <pre class="code" id="snippet-contract-main-option">
-(* Behaviour of the contract. *)
-Definition main_option (ps : param * storage) : option ((list operation) * storage) :=
-  match ps with
-
-  (* Start a bid *)
-  | (Bid newAmount, {| state := Available; metadata := metadata |}) =>
-    Some ([], {| state := CurrentBid newAmount; metadata := metadata |})
-
-  (* New bid (must be higher than the existing *)
-  | (Bid newAmount, {| state := CurrentBid existingAmount; metadata := metadata |})  =>
-    if existingAmount &lt;? newAmount then
-      Some ([], {| state := CurrentBid newAmount; metadata := metadata |})
-    else
-      None
-
-  (* Finish the auction *)
-  | (Claim, {| state := CurrentBid existingAmount; metadata := metadata |}) =>
-    if has_permission_to_claim metadata then
-      Some ([transaction tt (lit_mutez 0) destination_account],
-            {| state := Sold existingAmount; metadata := metadata |})
-    else
-      None
-    (* All other cases are errors. *)
-  | (_,             _storage)                  =&gt;
-    None
-  end.
     </pre>
 
     <div class="toggle hidden">
@@ -196,10 +119,8 @@ Definition main_option (ps : param * storage) : option ((list operation) * stora
       properties with Coqueligot.
 
     <p>Finally, we declare what should be the initial storage of the contract when deployed.</p>
-      <div class="toggle hidden">
-      <pre class="code" id="snippet-contract-initial-storage">
-      </pre>
-      </div>
+    <pre class="code" id="snippet-contract-initial-storage">
+    </pre>
   </section>
   <section>
     <h1>Specification</h1>
