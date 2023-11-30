@@ -15,6 +15,7 @@
 <!--<script src="common/jquery-ui/jquery-ui.js"></script>-->
 <!--<script src="common/toggleproofs.js"></script>-->
 <!--<link href="common/css/lf.css" rel="stylesheet" type="text/css"/>-->
+<script src="my.js"></script>
 </head>
 
 <body>
@@ -32,7 +33,6 @@
 
 
 <div class="doc">
-
   <section>
     <h1>Introduction</h1>
     <p>This tutorial will show how to write a very simple auction smart contract in Coqueligot,
@@ -64,12 +64,12 @@
     </dl>
 
     So the type of the state will be :
-    <pre class="code">
+<pre class="code" id="snippet-contract-storage">
 Inductive storage_state :=
 | Available  : storage_state
 | CurrentBid : nat -> storage_state
 | Sold       : nat -> storage_state.
-      </pre>
+</pre>
 
 <div class="toggle hidden">
 <pre class="code">
@@ -696,6 +696,17 @@ Qed.
     </ul>
   
   In the last section, we'll see the tooling used to actually build our contract and check for the proofs.
+  </section>
+
+  <section>
+    <h1>Extraction (TODO)</h1>
+    <pre class="code">
+      Definition id : forall {A}, A -> A := fun _ x => x.
+      Require Import Extraction.
+      Extraction "file.ml" id.
+</pre>
+<button onclick="get_file_string('/home/file.ml', function(x) { document.getElementById('extracted').innerText = x; })">▶️ Extract</button>
+<pre id="extracted"></pre>
   </section>
 
   <section>
