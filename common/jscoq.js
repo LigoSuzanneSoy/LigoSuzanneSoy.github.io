@@ -29,6 +29,16 @@ var jscoq_opts = {
     file_dialog: true
 };
 
+var onJsCoqLoaded = [];
+var isJsCoqLoaded = false;
+function waitJsCoqLoaded(f) {
+  if (isJsCoqLoaded) {
+    f();
+  } else {
+    onJsCoqLoaded[onJsCoqLoaded.length] = f;
+  }
+}
+
 async function jsCoqLoad() {
     // - remove empty code fragments (coqdoc generates some spurious ones)
     $('pre.code').each(function() {
@@ -61,10 +71,17 @@ async function jsCoqLoad() {
     // - close button (replaces jsCoq's bulky power button)
     $('#panel-wrapper #toolbar').prepend($('<button>').addClass('close').text('×')
         .on('click', () => coq.layout.hide()));
+    
+    console.log('isJsCoqLoaded = true');
+    isJsCoqLoaded = true;
+    for (var i = 0; i < onJsCoqLoaded.length; i++) {
+        onJsCoqLoaded[i]();
+    }
+    onJsCoqLoaded=null;
 }
 
 function jsCoqStart() {
-    coq.layout.show();
+    waitJsCoqLoaded(function() { coq.layout.show(); });
 }
 
 function isTerse() {
