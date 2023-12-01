@@ -1,9 +1,15 @@
 html {
 	background: #eee;
-	padding: 0 .5em;
+	margin: 0;
+    padding: 0;
 }
 
-#git-tutorial {
+body {
+    margin: 0;
+    padding: 0;
+}
+
+#tutorial {
 	background: white;
 	border: thick solid #ddd;
 	border-radius: 2em;
@@ -97,5 +103,17 @@ ul:last-child {
 }
 
 .toggle.hidden:hover {
-    opacity: 0.5;
+  opacity: 0.5;
 }
+
+html #jscoq-plug { /* override using html as an extra qualifier */
+  position: fixed;
+}
+
+html .coq-eval-ok { /* override using html as an extra qualifier */
+  background-color: #bef0be;
+}
+
+html .coq-eval-pending { /* override using html as an extra qualifier */
+	background-color: #bebef0;
+  }

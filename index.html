@@ -8,103 +8,90 @@
   <!-- Replace the "ipfs://…" string below with "#" to obtain the original copy as hosted on IPFS. -->
   <link rel="canonical" class="ipfs-this-hash-placeholder" href="#" />
   <link rel="alternate" href="https://ligolang.org/" />
-<!--<link href="common/css/sf.css" rel="stylesheet" type="text/css" />-->
-<!--<link href="common/jquery-ui/jquery-ui.css" rel="stylesheet">-->
-<script src="common/jquery-ui/external/jquery/jquery.js"></script>
-<link rel="stylesheet" type="text/css" href="style.css" />
-<!--<script src="common/jquery-ui/jquery-ui.js"></script>-->
-<!--<script src="common/toggleproofs.js"></script>-->
-<!--<link href="common/css/lf.css" rel="stylesheet" type="text/css"/>-->
-<script src="my.js"></script>
+  <script src="common/jquery-ui/external/jquery/jquery.js"></script>
+  <link rel="stylesheet" type="text/css" href="style.css" />
+  <!--<link href="common/jquery-ui/jquery-ui.css" rel="stylesheet">
+      <script src="common/jquery-ui/jquery-ui.js"></script>-->
+  <script src="my.js"></script>
 </head>
-
 <body>
-
   <script src="common/jscoq.js"></script>
   <script src="node_modules/wacoq/ui-js/jscoq-loader.js"></script>
+  <main id="page">
+    <article id="tutorial">
+      <h1 class="libtitle">Formally Proven Smart Contract Tutorial</h1>
+      <section>
+        <h1>Introduction</h1>
+        <p>This tutorial will show how to write a very simple auction smart contract in Coqueligot,
+          then write a formal specification for some of the behaviour of that contract.</p>
+        <p>Finally, this tutorial will explain the proof techniques used to ensure that
+          the contract meets the specification for any possible sequence
+          of on-chain calls to that contract.</p>
+      </section>
+    <section>
+      <h1>The contract</h1>
+      <p>
+        As a first step, we will write a very simple auction smart contract.
+        The principe of this contract is that :
+      </p>
+      <ol>
+        <li>At first, there is an available item for sale.</li>
+        <li>People can place a bid on the item, each one bidding higher than the previous one.</li>
+        <li>At the end, the highest bidder can claim their item.</li>
+      </ol>
 
-<div id="page">
+      <p>
+        This means that the smart contract can be in 3 possible states (the state will be in the smart contract storage)
+      </p>
+      <dl>
+        <dt>Available</dt>
+        <dd>The item is available but there have been no bids so far;</dd>
+        <dt>CurrentBid price</dt>
+        <dd>The current bid value is <code>price</code>;</dd>
+        <dt>Sold price</dt>
+        <dd>The object has been sold for <code>price</code>, no more bids can be placed.</dd>
+      </dl>
 
-<div id="main">
-
-  <article id="git-tutorial">
-
-<h1 class="libtitle">Formally Proven Smart Contract Tutorial</h1>
-
-
-<div class="doc">
-  <section>
-    <h1>Introduction</h1>
-    <p>This tutorial will show how to write a very simple auction smart contract in Coqueligot,
-      then write a formal specification for some of the behaviour of that contract.</p>
-    <p>Finally, this tutorial will explain the proof techniques used to ensure that
-      the contract meets the specification for any possible sequence
-      of on-chain calls to that contract.</p>
-  </section>
-  <section>
-    <h1>The contract</h1>
-    <p>As a first step, we will write a very simple auction smart contract.
-
-      The principe of this contract is that :<br>
-    <ol>
-      <li>At first, there is an available item for sale.</li>
-      <li>People can place a bid on the item, each one bidding higher than the previous one.</li>
-      <li>At the end, the highest bidder can claim their item.</li>
-    </ol>
-    </p>
-
-    So, the smart contract can be in 3 possible states (the state will be in the smart contract storage)
-    <dl>
-      <dt>Available</dt>
-      <dd>The item is available but there have been no bids so far;</dd>
-      <dt>CurrentBid price</dt>
-      <dd>The current bid value is <code>price</code>;</dd>
-      <dt>Sold price</dt>
-      <dd>The object has been sold for <code>price</code>, no more bids can be placed.</dd>
-    </dl>
-
-    So the type of the state will be :
-    <pre class="code" id="snippet-contract-type-storage">
+      <p>Therefore the type of the state will be :</p>
+      <pre class="code" id="snippet-contract-type-storage">
 (* Declare enum for the storage (three states) *)
 Inductive storage :=
 | Available  : storage
 | CurrentBid : nat -&gt; storage
 | Sold       : nat -&gt; storage.
+</pre>
 
-    </pre>
+      <details class="toggle hidden">
+        <summary>type: metadata</summary>
+        <pre class="code" id="snippet-contract-type-metadata"></pre>
+      </details>
 
-    <div class="toggle hidden">
-      <pre class="code" id="snippet-contract-type-metadata">
-      </pre>
-    </div>
-
-    Also, people can either bid or claim, which leads to the transaction type being :
-    <pre class="code" id="snippet-contract-type-param">
+      <p>Users of the contract can either place a bid or claim the object, which leads to the transaction type being :</p>
+      <pre class="code" id="snippet-contract-type-param">
 (* Declare enum for the parameter (two possible actions) *)
 Inductive param :=
 | Bid   : nat -&gt; param
 | Claim : param.
+</pre>
 
-    </pre>
+      When the smart contract receives a transaction, it can handle 4 cases:
 
-    
-    Now, when the smart contract receives a transaction, 4 things can happen :
+      <ul>
+        <li>Someone bids, and it's the first bid</li>
+        In this case, the contracts saves the bid, whatever the price provided.
+        <li>Someone bids, and it's NOT the first bid</li>
+        In that case, the contracts checks that the bid is higher than the current price.
+        if not, then the transaction is invalid.
+        <li>Someone claims their item</li>
+        The contract checks that the claimer is the highest bidder and hasn't claimed already.
+        Otherwise, the transaction is invalid.
+        <li>In all other cases, the transaction is invalid</li>
+      </ul>
 
-    <ul>
-      <li>Someone bids, and it's the first bid</li>
-      In this case, the contracts saves the bid, whatever the price provided.
-      <li>Someone bids, and it's NOT the first bid</li>
-      In that case, the contracts checks that the bid is higher than the current price.
-      if not, then the transaction is invalid.
-      <li>Someone claims their item</li>
-      The contract checks that the claimer is the highest bidder and hasn't claimed already.
-      Otherwise, the transaction is invalid.
-      <li>In all other cases, the transaction is invalid</li>
-    </ul>
-
-    This behaviour is directly translated by the contract's main function :
-    <div class="toggle hidden">
-      <pre class="code" id="snippet-contract-boilerplate-header">
+      This behaviour is directly translated by the contract's main function :
+      <details class="toggle hidden">
+        <summary>boilerplate header</summary>
+        <pre class="code" id="snippet-contract-boilerplate-header">
 (* Simple auction contract *)
 
 (* Require Coq built-ins, declare LIGO built-ins and shorthands *)
@@ -136,10 +123,9 @@ Definition fail_in_main {A} (a : A) := a.
 (* ********************************************* *)
 (*                    Contract                   *)
 (* ********************************************* *)
-
-      </pre>
-    </div>
-    <pre class="code" id="snippet-contract-main-option">
+</pre>
+      </details>
+      <pre class="code" id="snippet-contract-main-option">
 (* Behaviour of the contract. *)
 Definition main_option (ps : param * storage) : option ((list operation) * storage) :=
   match ps with
@@ -156,11 +142,15 @@ Definition main_option (ps : param * storage) : option ((list operation) * stora
   (* All other cases are errors. *)
   | (_,             _storage)                  =&gt; None
   end.
+</pre>
 
-    </pre>
-
-    <div class="toggle hidden">
-    <pre class="code" id="snippet-contract-main-err">
+      <details class="toggle hidden">
+        <summary>
+          <em>Note :</em>
+          The behaviour of the contract is contained in this <code>main_option</code> function, which might appear as an odd naming.
+          This is because the actual <code>main</code> function is just a wrapper over <code>main_option</code>, which handles error cases.
+        </summary>
+        <pre class="code" id="snippet-contract-main-err">
 Definition main (ps : param * storage) : (list operation * storage) :=
   match main_option ps with
   (* On success, return the result *)
@@ -168,66 +158,58 @@ Definition main (ps : param * storage) : (list operation * storage) :=
   (* On failure, return an empty list of operations and the unmodified storage *)
   | None =&gt; fail_in_main ([], let (p,s) := ps in s)
   end.
+</pre>
+      </details>
 
-    </pre>
-    </div>
+      <p><em>Note : </em>Several checks are not done here, like checking if the user claiming the sale has the right
+        permissions to do that, for example.
+        <br>
+        This contract is indeed just an example, not production-ready.
+        <br>
+        We wanted the contract to remain simple in order to focus on illustrating the potential of formally proving
+        properties with Coqueligot.
 
-    <p><em>Note :</em>
-      The behaviour of the contract is contained in this <code>main_option</code> function, which might appear as an odd naming.
-      <br>
-      It's because the actual <code>main</code> function is just a wrapper over <code>main_option</code>, which handles error cases.
-    </p>
-
-    <p><em>Note : </em>Several checks are not done here, like checking if the user claiming the sale has the right
-      permissions to do that, for example.
-      <br>
-      This contract is indeed just an example, not production-ready.
-      <br>
-      We wanted the contract to remain simple in order to focus on illustrating the potential of formally proving
-      properties with Coqueligot.
-
-    <p>Finally, we declare what should be the initial storage of the contract when deployed.</p>
-    <pre class="code" id="snippet-contract-initial-storage">
+      <p>Finally, we declare what should be the initial storage of the contract when deployed.</p>
+      <pre class="code" id="snippet-contract-initial-storage">
 Definition initial_storage := Available.
 
 (* ********************************************* *)
 (*                End of Contract                *)
-(* ********************************************* *)
-    </pre>
-  </section>
-  <section>
-    <h1>Specification</h1>
+(* ********************************************* *)</pre>
+    </section>
+    <section>
+      <h1>Specification</h1>
 
-    <h3> Random tests vs. formal proofs </h3>
-    <p>When writing a program, it is good practice to write tests.
-      Instead of jotting down a few test cases for specific inputs,
-      we will write a formal specification describing some aspects
-      of the expected behaviour. That specification will indicate
-      if a behaviour is correct, for any possible input. This is a
-      common practice when using a test framework which randomizes
-      the inputs: the test specification compares the input and
-      output of the <code>main</code> function, and asserts that
-      the output is correct for the given input. Instead of checking
-      that this property holds for a random subset of possible
-      inputs, Coqueligot allows us to check that the specification
-      holds for all possible inputs.</p>
+      <h3> Random tests vs. formal proofs </h3>
+      <p>When writing a program, it is good practice to write tests.
+        Instead of jotting down a few test cases for specific inputs,
+        we will write a formal specification describing some aspects
+        of the expected behaviour. That specification will indicate
+        if a behaviour is correct, for any possible input. This is a
+        common practice when using a test framework which randomizes
+        the inputs: the test specification compares the input and
+        output of the <code>main</code> function, and asserts that
+        the output is correct for the given input. Instead of checking
+        that this property holds for a random subset of possible
+        inputs, Coqueligot allows us to check that the specification
+        holds for all possible inputs.</p>
 
-    <h3> The properties to prove (i.e. our specification) </h3>
-    <p>The property we will try to prove is that the object is sold
-      for an amount equal to the maximum bid, or phrased differently,
-      that all bids are less than or equal to the sold-for amount.
-      These two phrasings are not strictly equivalent, and we chose
-      to include both statements in the specification. Having
-      redundancy in the specification, with statements which look
-      intuitively correct, is an easy way to have a more convincingly
-      correct specification.</p>
+      <h3> The properties to prove (i.e. our specification) </h3>
+      <p>The property we will try to prove is that the object is sold
+        for an amount equal to the maximum bid, or phrased differently,
+        that all bids are less than or equal to the sold-for amount.
+        These two phrasings are not strictly equivalent, and we chose
+        to include both statements in the specification. Having
+        redundancy in the specification, with statements which look
+        intuitively correct, is an easy way to have a more convincingly
+        correct specification.</p>
 
-    Our specification will thus consist in these two properties to prove :
+      Our specification will thus consist in these two properties to prove :
 
-    <p>
-      <em>All bids are less than or equal to the sold-for amount.</em>
+      <p>
+        <em>All bids are less than or equal to the sold-for amount.</em>
 
-      <pre class="code">
+        <pre class="code">
 Definition spec_bids_are_less_than_sold_for_amount :=
   forall (l : list param) (amount : nat),
     forall (Hcontains : contains_bid l amount),
@@ -235,206 +217,199 @@ Definition spec_bids_are_less_than_sold_for_amount :=
       | Sold sold_for_amount => 
           amount <= sold_for_amount
       | _ => True
-      end.
-      </pre>
-    </p>
+      end.</pre>
+      </p>
 
-    <p>
-      <em>The storage is equal to the max of the bids seen so far</em>
+      <p>
+        <em>The storage is equal to the max of the bids seen so far</em>
 
-      <pre class="code">
+        <pre class="code">
 Definition spec_max :=
   forall (l : list param),
-    Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l))).
-      </pre>
-    </p>
+    Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l))).</pre>
+      </p>
 
-    <h3>Redundancy in specification</h3>
+      <h3>Redundancy in specification</h3>
 
-    <p>Care should be taken, however, to ensure that the specification
-      is strict enough, and does not allow for incorrect behaviour.
-      <br>
-      For example, <em>"all bids are less than or equal to the sold-for
-        amount"</em> actually allows the object to be sold for an amount
-      greater than any of the bids.
-      <br>
-      The follwoing sequence of states :
-    <pre>
-  Available
-  CurrentBid 1
-  CurrentBid 3
-  CurrentBid 8
-  Sold 23 
-        </pre>
-    instinctively looks incorrect (why is the
-    item sold for 23 when the last bid was 8?), but would satisfy
-    that part of the specification.</p>
-    <p>
-      The <em>"sold for an amount equal to the maximum bid"</em> part of the specification,
-      on the other hand, sets precise bounds on the sold-for price:
-      <br>
-      it should be exactly equal to the maximum of all bids, no more, no less.
-      <br>
-      In that sense, that property gives us a stronger guarantee on the correctness of the contract.
-    </p>
-  </section>
-  <section>
-    <h1>Induction on blockchain transactions</h1>
-
-    <h3>The induction principle</h3>
-
-    <p>
-    So far, we wrote the contract, and wrote the specification (the two properties to prove).
-    Now we would like to prove them.
-    </p>
-
-    <p>
-    Notice that those properties reason on the contract state over <em>a list of transactions</em>,
-    whereas our smart contract is a function (<code>main</code>) operating on <em>one transaction</em>.
-    <br>
-    It decides what should be state <code>n + 1</code> given a state <code>n</code> and a transaction.
-    </p>
-
-    <p>
-    More generally, writing the contract implies a per-transaction reasoning,
-    while writing the specification often requires an over-all-transactions reasoning.
-    </p>
-
-    <p>
-    So, the specification contains properties over transaction lists,
-    but we would prefer to prove properties over a single transaction with the code of <code>main</code>,
-    so we need a way to "reduce" proofs over a transaction list to proofs over a single transaction;
-    we need an induction principle over blockchain transactions, and this is essentially what Coqueligot's
-    <code>fold_invariant_aux</code> theorem provides.
-    </p>
-
-    <p>
-    Provide a proof that the <code>main</code> function of the smart contract preserves an invariant <code>P</code> over the state,
-    and that it holds for the initial state, and this induction principle will provide you a proof that <code>P</code> holds for the
-    state after any sequence of transactions.
-    </p>
-
-    <h3>Parallel with a list fold</h3>
-    <p>
-    In its core idea, this is just a fold over a list.
-    The <code>list_fold</code> function takes
-    <ul>
-      <li><code>l</code> : a list of elements</li>
-      <li><code>f</code>: a function operating over the elements</li> 
-      <li><code>accu_init</code> : an initial value for the accumulator </li>
-    </ul>
-    and folds over the list, providing the final value for the accumulator.
-    </p>
-
-    Here
-    <ul>
-      <li>l is our list of transactions</li>
-      <li>f is the main function of the smart contract</li>
-      <li>the accumulator is the state (+ some auxiliaty data)</li>
-      <li>accu_init is the initial value of the contract storage</li>
-      <li>the final acccumulator value is the state of the contract storage after executing the list of transaction.</li>
-    </ul>
-    </p>
-
-    <em>Note :</em> The <code>fold_invariant_aux</code> doesn't just fold over a list, it also :
-    <ol>
-      <li>Filters invalid transactions (provided a predicate telling when a transaction is valid or not)</li>
-      <li>Allows for carrying auxliary cross-transaction data to reason about in our proofs.
+      <p>Care should be taken, however, to ensure that the specification
+        is strict enough, and does not allow for incorrect behaviour.
         <br>
-        It is used when we need some information to be saved over transaction calls
-        (so we can reason about them in our proofs) but that are not part of the contract so we don't want them in the actual on-chain storage.
-      </li>
+        For example, <em>"all bids are less than or equal to the sold-for
+          amount"</em> actually allows the object to be sold for an amount
+        greater than any of the bids.
+        <br>
+        The follwoing sequence of states :
+      <pre>Available
+CurrentBid 1
+CurrentBid 3
+CurrentBid 8</pre>
+      instinctively looks incorrect (why is the
+      item sold for 23 when the last bid was 8?), but would satisfy
+      that part of the specification.</p>
+      <p>
+        The <em>"sold for an amount equal to the maximum bid"</em> part of the specification,
+        on the other hand, sets precise bounds on the sold-for price:
+        <br>
+        it should be exactly equal to the maximum of all bids, no more, no less.
+        <br>
+        In that sense, that property gives us a stronger guarantee on the correctness of the contract.
+      </p>
+    </section>
+    <section>
+      <h1>Induction on blockchain transactions</h1>
 
-    </ol>
+      <h3>The induction principle</h3>
 
-    <h3>Signature of the lemma</h3>
+      <p>
+      So far, we wrote the contract, and wrote the specification (the two properties to prove).
+      Now we would like to prove them.
+      </p>
 
-    So, here it is, the signature of the induction principle over blockchain transactions :
-    <pre class="code">
+      <p>
+      Notice that those properties reason on the contract state over <em>a list of transactions</em>,
+      whereas our smart contract is a function (<code>main</code>) operating on <em>one transaction</em>.
+      <br>
+      It decides what should be state <code>n + 1</code> given a state <code>n</code> and a transaction.
+      </p>
+
+      <p>
+      More generally, writing the contract implies a per-transaction reasoning,
+      while writing the specification often requires an over-all-transactions reasoning.
+      </p>
+
+      <p>
+      So, the specification contains properties over transaction lists,
+      but we would prefer to prove properties over a single transaction with the code of <code>main</code>,
+      so we need a way to "reduce" proofs over a transaction list to proofs over a single transaction;
+      we need an induction principle over blockchain transactions, and this is essentially what Coqueligot's
+      <code>fold_invariant_aux</code> theorem provides.
+      </p>
+
+      <p>
+      Provide a proof that the <code>main</code> function of the smart contract preserves an invariant <code>P</code> over the state,
+      and that it holds for the initial state, and this induction principle will provide you a proof that <code>P</code> holds for the
+      state after any sequence of transactions.
+      </p>
+
+      <h3>Parallel with a list fold</h3>
+      <p>
+      In its core idea, this is just a fold over a list.
+      The <code>list_fold</code> function takes
+      <ul>
+        <li><code>l</code> : a list of elements</li>
+        <li><code>f</code>: a function operating over the elements</li> 
+        <li><code>accu_init</code> : an initial value for the accumulator </li>
+      </ul>
+      and folds over the list, providing the final value for the accumulator.
+      </p>
+
+      Here
+      <ul>
+        <li>l is our list of transactions</li>
+        <li>f is the main function of the smart contract</li>
+        <li>the accumulator is the state (+ some auxiliaty data)</li>
+        <li>accu_init is the initial value of the contract storage</li>
+        <li>the final acccumulator value is the state of the contract storage after executing the list of transaction.</li>
+      </ul>
+      </p>
+
+      <em>Note :</em> The <code>fold_invariant_aux</code> doesn't just fold over a list, it also :
+      <ol>
+        <li>Filters invalid transactions (provided a predicate telling when a transaction is valid or not)</li>
+        <li>Allows for carrying auxliary cross-transaction data to reason about in our proofs.
+          <br>
+          It is used when we need some information to be saved over transaction calls
+          (so we can reason about them in our proofs) but that are not part of the contract so we don't want them in the actual on-chain storage.
+        </li>
+
+      </ol>
+
+      <h3>Signature of the lemma</h3>
+
+      So, here it is, the signature of the induction principle over blockchain transactions :
+      <pre class="code">
 Theorem fold_invariant_aux :
   forall {state         : Type}                           (* The type of the contract storage, for us its 'storage_state' *)
-         {aux           : Type}                           (* The type of the auxiliaty cross-transaction data *)
-         (initial_value : state)                          (* Value of the storage before the first transaction *)
-         (initial_aux   : aux)                            (* Same as above for auxiliary data *)
-         {arg           : Type}                           (* Type of a transaction, for us its 'param' *)
-         (f             : state -> arg -> state)          (* The code of the contract's main function, 'main_option' *)
-         (g             : aux -> arg -> aux)              (* Function describing what to do with aux data during a transaction *)
-         (l             : list arg)                       (* The list of blockchain transactions *)
-         (valid         : t_env -> state -> arg -> bool)  (* The predicate saying when a transaction is valid or not *)
-         (filter_valid
+        {aux           : Type}                           (* The type of the auxiliaty cross-transaction data *)
+        (initial_value : state)                          (* Value of the storage before the first transaction *)
+        (initial_aux   : aux)                            (* Same as above for auxiliary data *)
+        {arg           : Type}                           (* Type of a transaction, for us its 'param' *)
+        (f             : state -> arg -> state)          (* The code of the contract's main function, 'main_option' *)
+        (g             : aux -> arg -> aux)              (* Function describing what to do with aux data during a transaction *)
+        (l             : list arg)                       (* The list of blockchain transactions *)
+        (valid         : t_env -> state -> arg -> bool)  (* The predicate saying when a transaction is valid or not *)
+        (filter_valid
             := filter_args valid f initial_value)
-         (P             : state -> aux -> Prop)           (* The over-all-transaction property we want to prove *)
+        (P             : state -> aux -> Prop)           (* The over-all-transaction property we want to prove *)
 
-         (Invalid_is_noop :                               (* A proof that invalid transactions lead to no change of state *)
+        (Invalid_is_noop :                               (* A proof that invalid transactions lead to no change of state *)
             forall state arg,
               valid state arg = false ->
               f state arg = state)
 
-         (Hind : forall xarg xstate xaux,                 (* A proof that P is preserved over one call to the contract *)
-                   P xstate xaux ->
-                   (*In xarg l ->*)
-                   valid xstate xarg = true ->
-                   P (f xstate xarg) (g xaux xarg))
+        (Hind : forall xarg xstate xaux,                 (* A proof that P is preserved over one call to the contract *)
+                  P xstate xaux ->
+                  (*In xarg l ->*)
+                  valid xstate xarg = true ->
+                  P (f xstate xarg) (g xaux xarg))
 
-         (H0 : P initial_value initial_aux),             (* A proof that P is true in the first place, at the start *)
+        (H0 : P initial_value initial_aux),             (* A proof that P is true in the first place, at the start *)
 
-         P (fold_left f               l  initial_value)  (* The return type, aka the proof that P hold all the time *)
-           (fold_left g (filter_valid l) initial_aux).
-      </pre>
-    
-    When faced with properties over lists of transactions, apply this lemma to reduce it into
-    a simpler proof over 1 transaction. The problem will be reduced to 3 simpler properties to prove :
+        P (fold_left f               l  initial_value)  (* The return type, aka the proof that P hold all the time *)
+          (fold_left g (filter_valid l) initial_aux).</pre>
+      
+      When faced with properties over lists of transactions, apply this lemma to reduce it into
+      a simpler proof over 1 transaction. The problem will be reduced to 3 simpler properties to prove :
 
-    <ol>
-      <li>Invaid_is_noop (the main function is a no-op when a parameter is invalid)</li>  
-      <li>Induction property : <code> Hind : P(x, extra_context) -> P(f(x), g(extra_context) </code></li> 
-      <li>Property on the initial state : <code> H0: P(initial_x, initial_extra_context) </code></li> 
-    </ol>
+      <ol>
+        <li>Invaid_is_noop (the main function is a no-op when a parameter is invalid)</li>  
+        <li>Induction property : <code> Hind : P(x, extra_context) -> P(f(x), g(extra_context) </code></li> 
+        <li>Property on the initial state : <code> H0: P(initial_x, initial_extra_context) </code></li> 
+      </ol>
 
-    <p>This lemma allows us to strengthen an invariant of the <code>main</code>
-      function iterated over lists of valid parameters, to an invariant on the
-      <code>main</code> function iterated over lists of any parameters.
-    </p>
+      <p>This lemma allows us to strengthen an invariant of the <code>main</code>
+        function iterated over lists of valid parameters, to an invariant on the
+        <code>main</code> function iterated over lists of any parameters.
+      </p>
 
-    <p>This lemma also allows us to reason about the history of past parameters
-      (e.g. the running maximum of the bids seen so far), by using an auxiliary
-      value starting at <code>initial_aux</code>, and stepped using the function
-      <code>g</code> over only the valid parameters.
-    </p>
+      <p>This lemma also allows us to reason about the history of past parameters
+        (e.g. the running maximum of the bids seen so far), by using an auxiliary
+        value starting at <code>initial_aux</code>, and stepped using the function
+        <code>g</code> over only the valid parameters.
+      </p>
 
-    <p>These aspects of the lemma allow us to leverage local reasoning about
-      invariants of the main function, in the "happy path" case of valid parameters,
-      in order to obtain global properties on the iterated application of
-      <code>main</code> to a list of parameters, i.e. it allows us to guarantee
-      a property on any sequence of contract calls, using an invariant that reasons
-      only about a single call to the main function using valid parameters only.
-    </p>
+      <p>These aspects of the lemma allow us to leverage local reasoning about
+        invariants of the main function, in the "happy path" case of valid parameters,
+        in order to obtain global properties on the iterated application of
+        <code>main</code> to a list of parameters, i.e. it allows us to guarantee
+        a property on any sequence of contract calls, using an invariant that reasons
+        only about a single call to the main function using valid parameters only.
+      </p>
 
-    In the next section, we'll see an example of application of this lemma,
-    when we look at the proof for one of the properties of the above specification.
+      In the next section, we'll see an example of application of this lemma,
+      when we look at the proof for one of the properties of the above specification.
 
-  </section>
-  <section>
-    <h1>A proof for the specification, using our lemma</h1>
+    </section>
+    <section>
+      <h1>A proof for the specification, using our lemma</h1>
 
-    Now that we write the contract, the specification, and introduced the induction-over-transaction lemma,
-    let's get to the core part : proving our specification.
-    <br>
-    We'll walk through the proof of <code>spec_max</code>.
-    <br>
-    As a reminder, here's the definition of <code>spec_max</code> :
+      Now that we write the contract, the specification, and introduced the induction-over-transaction lemma,
+      let's get to the core part : proving our specification.
+      <br>
+      We'll walk through the proof of <code>spec_max</code>.
+      <br>
+      As a reminder, here's the definition of <code>spec_max</code> :
 
-    <pre class="code">
+      <pre class="code">
 Definition spec_max :=
   forall (l : list param),
-    Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l))).
-    </pre>
+    Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l))).</pre>
 
-    <h3>Step 1 : Decomposing with the lemma</h3>
+      <h3>Step 1 : Decomposing with the lemma</h3>
 
-    Now for the proof, the first part consists essentially in applying the lemma to decompose it into 3 subproofs :
+      Now for the proof, the first part consists essentially in applying the lemma to decompose it into 3 subproofs :
 
-    <pre class="code">
+      <pre class="code">
 Theorem unit_test_max : spec_max.
 intros l.
 
@@ -469,65 +444,63 @@ rewrite <- fold_symmetric; cycle 1.
     apply main_preserves_invariant_max.
   + (* Subproof 3 : Proving that the hypothesis holds for the initial state *)
     compute; auto.
-Qed.
-    </pre>
+Qed.</pre>
 
 
-    <h3>Step 2 : Subproof that invalid transactions don't change the state</h3>
+      <h3>Step 2 : Subproof that invalid transactions don't change the state</h3>
 
-    Property to prove :
+      Property to prove :
 
-    <pre class="code">
-    Theorem invalid_is_noop_on_main :
-      forall storage x,
-        valid_op storage x = false -> main_get_storage storage x = storage.
-    </pre>
+      <pre class="code">
+      Theorem invalid_is_noop_on_main :
+        forall storage x,
+          valid_op storage x = false -> main_get_storage storage x = storage.</pre>
 
-    The proof consists in a case analysis over the value of the transaction parameter and state.
+      The proof consists in a case analysis over the value of the transaction parameter and state.
 
-    The truth table of transaction validity is summarized in the table below :
+      The truth table of transaction validity is summarized in the table below :
 
-    <p>
-    <table>
-      <thead>
-        <tr>
-          <th>param \ state</th>
-          <th>Available</th>
-          <th>CurrentBid m<br></th>
-          <th>Sold m</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Bid n</td>
-          <td>true</td>
-          <td>m &lt; n</td>
-          <td>false</td>
-        </tr>
-        <tr>
-          <td>Claim</td>
-          <td>false</td>
-          <td>true</td>
-          <td>false</td>
-        </tr>
-      </tbody>
-      </table>
-    </p>
+      <p>
+      <table>
+        <thead>
+          <tr>
+            <th>param \ state</th>
+            <th>Available</th>
+            <th>CurrentBid m<br></th>
+            <th>Sold m</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Bid n</td>
+            <td>true</td>
+            <td>m &lt; n</td>
+            <td>false</td>
+          </tr>
+          <tr>
+            <td>Claim</td>
+            <td>false</td>
+            <td>true</td>
+            <td>false</td>
+          </tr>
+        </tbody>
+        </table>
+      </p>
 
-    And the proof consists essentially in the case analysis with rewrites and unfolds for every case.
+      And the proof consists essentially in the case analysis with rewrites and unfolds for every case.
 
-    <p>
-    On valid cases, the precondition <code>valid_op storage x = false</code> evaluates to <code>true = false</code>
-    and the <code>inversion</code> tactic is used to prove these cases by contradiction.
-    </p>
+      <p>
+      On valid cases, the precondition <code>valid_op storage x = false</code> evaluates to <code>true = false</code>
+      and the <code>inversion</code> tactic is used to prove these cases by contradiction.
+      </p>
 
-    <p>
-    On invalid cases, the postcondition <code>main_get_storage storage x = storage</code> becomes
-    trivial enough so it can be solved using the <code>reflexivity</code> tactic, after expanding
-    some parts of the code.
-    </p>
+      <p>
+      On invalid cases, the postcondition <code>main_get_storage storage x = storage</code> becomes
+      trivial enough so it can be solved using the <code>reflexivity</code> tactic, after expanding
+      some parts of the code.
+      </p>
 
-    <pre class="code">
+      <pre class="code">
 Theorem invalid_is_noop_on_main :
   forall storage x,
     valid_op storage x = false -> main_get_storage storage x = storage.
@@ -583,29 +556,28 @@ case_eq x.
   + (* state = Sold n *)
     intros n Hs Hx.
     reflexivity.
-Qed.
-    </pre>
+Qed.</pre>
 
-    <h3>Step 3 : Subproof that a call to the contract preserves the invariant</h3>
+      <h3>Step 3 : Subproof that a call to the contract preserves the invariant</h3>
 
-    For the induction hypothesis, the same strategy applies.
-    <br>
-    It's a case analysis over the parameter and state values,
-    with some preliminary <code>rewrite</code> and <code>unfold</code> on each case.
-    <br>
-    In this proof, we assume that the transaction is valid (if it is invalid, we have already proved that the main function
-    is a no-op). Therefore, the cases for invalid transactions are discarded using <code>inversion</code> on <code>Hvalid</code>.
-    <br>
-    The valid cases are simplified enough so they can be proven by executing as much code as possible, using <code>compute</code>,
-    or by noticing trivial equalities, via <code>reflexivity</code>.
+      For the induction hypothesis, the same strategy applies.
+      <br>
+      It's a case analysis over the parameter and state values,
+      with some preliminary <code>rewrite</code> and <code>unfold</code> on each case.
+      <br>
+      In this proof, we assume that the transaction is valid (if it is invalid, we have already proved that the main function
+      is a no-op). Therefore, the cases for invalid transactions are discarded using <code>inversion</code> on <code>Hvalid</code>.
+      <br>
+      The valid cases are simplified enough so they can be proven by executing as much code as possible, using <code>compute</code>,
+      or by noticing trivial equalities, via <code>reflexivity</code>.
 
-    <pre class="code">
+      <pre class="code">
 Lemma main_preserves_invariant_max :
   forall (xarg : param)
-         (xstorage : storage)
-         (xaux : nat)
-         (Pprev : Pmax xstorage xaux)
-         (Hvalid : valid_op xstorage xarg = true),
+        (xstorage : storage)
+        (xaux : nat)
+        (Pprev : Pmax xstorage xaux)
+        (Hvalid : valid_op xstorage xarg = true),
     Pmax (main_get_storage xstorage xarg) (u_max xaux xarg).
 intros xarg xstorage xaux Pprev Hvalid.
 induction xstorage as [ xstate metadata ].
@@ -685,75 +657,71 @@ case_eq xarg.
     unfold Pmax in Pprev.
     rewrite Pprev in *.
     reflexivity.
-Qed.
+Qed.</pre>
 
-    </pre>
-
-    Here is it for the proof of <code>spec_max</code>.
-    <br>
-    Proofs for other theorems will often follow the same strategy :
-    <ul>
-      <li>Simplifying the problem down with the <code>fold_invariant_aux</code> lemma</li>
-      <li>Decomposing the proofs by case analysis over the <code>parameter</code> and <code>state</code> values</li>
-      <li>Then, for each case :</li>
+      Here is it for the proof of <code>spec_max</code>.
+      <br>
+      Proofs for other theorems will often follow the same strategy :
       <ul>
-        <li>Stepping into the goal to prove with some <code>rewrite</code> and <code>unfold</code></li>
-        <li>The rest depends on the actual goal, but as we saw, it can be trivial enough to be solved with <code>reflexivity</code></li>
+        <li>Simplifying the problem down with the <code>fold_invariant_aux</code> lemma</li>
+        <li>Decomposing the proofs by case analysis over the <code>parameter</code> and <code>state</code> values</li>
+        <li>Then, for each case :</li>
+        <ul>
+          <li>Stepping into the goal to prove with some <code>rewrite</code> and <code>unfold</code></li>
+          <li>The rest depends on the actual goal, but as we saw, it can be trivial enough to be solved with <code>reflexivity</code></li>
+        </ul>
       </ul>
-    </ul>
-  
-  In the last section, we'll see the tooling used to actually build our contract and check for the proofs.
-  </section>
-
-  <section>
-    <h1>Extraction (TODO)</h1>
-    <pre class="code">
-      Definition id : forall {A}, A -> A := fun _ x => x.
-      Require Import Extraction.
-      Extraction "file.ml" id.
-</pre>
-<button onclick="get_file_string('/home/file.ml', function(x) { document.getElementById('extracted').innerText = x; })">▶️ Extract</button>
-<pre id="extracted"></pre>
-  </section>
-
-  <section>
-    <h1>Tooling</h1>
-    <p>
-      The <code>build.sh</code> script performs the following tasks:
-    </p>
-    <ul>
-      <li>Compile the coq source code with <code>coqc</code></li>
-      <li>Convert the OCaml code to CameLIGO code (a few minor compatibility details)</li>
-      <li>Runs <code>ligo compile contract</code> to produce Michelson code</li>
-    </ul>
-
-    The Michelson code obtained that way can then be used to originate the contract on-chain.
-
-    Furthermore, the <code>build.sh</code> script performs these checks:
     
-    <blockquote>
-      <p>For each <code>Definition spec_<em>XYZ</em> := …</code> in <code>specification.v</code>,
-      it checks that there is a <code>proof_<em>XYZ</em></code> file containing the proof
-      <code>Theorem unit_test_XYZ : spec_XYZ. <em>[...]</em> Qed.</code></li>.</p>
+    In the last section, we'll see the tooling used to actually build our contract and check for the proofs.
+    </section>
 
-      <p>Furthermore, the <code>build.sh</code> script prints the axioms used by each proof,
-        i.e. it shows which assumptions were made without being proven. Ideally, only some
-        axioms describing some opaque types like the Tezos <code>Operation</code> type would
-        appear in that list of assumptions.</p>
+    <section>
+      <h1>Extraction (TODO)</h1>
+      <pre class="code">
+        Definition id : forall {A}, A -> A := fun _ x => x.
+        Require Import Extraction.
+        Extraction "file.ml" id.</pre>
+  <button onclick="get_file_string('/home/file.ml', function(x) { document.getElementById('extracted').innerText = x; })">▶️ Extract</button></pre>
+    </section>
+
+    <section>
+      <h1>Tooling</h1>
+      <p>
+        The <code>build.sh</code> script performs the following tasks:
+      </p>
+      <ul>
+        <li>Extract the coq source code into OCaml code, using <code>coqc</code></li>
+        <li>Convert the OCaml code to CameLIGO code (a few minor compatibility details)</li>
+        <li>Runs <code>ligo compile contract</code> to produce Michelson code</li>
+      </ul>
+
+      The Michelson code obtained that way can then be used to originate the contract on-chain.
+
+      Furthermore, the <code>build.sh</code> script performs these checks:
       
-      <p>This allows us to have a clean separation between the specification and the proofs, while
-        ensuring that every part of the specification is indeed proven.</p>
-      
-      <p>Thanks to this organization, in order to understand what aspects of the contract's behaviour
-        have been formally proven, it suffices to read the specification, as well as the definitions
-        and axioms transitively used by the specification. The checks performed by <code>build.sh</code>
-        ensure that the specification is proven, and its success is essentially equivalent to an
-        <em style="color:darkgreen">all-green</em> when writing conventional unit tests. <em>It is
-          worth noting that it is not necessary to read the proofs, as they are automatically
-          checked.</em></p>
-    </blockquote>
-  </section>
-</article>
-</div>
+      <blockquote>
+        <p>For each <code>Definition spec_<em>XYZ</em> := …</code> in <code>specification.v</code>,
+        it checks that there is a <code>proof_<em>XYZ</em></code> file containing the proof
+        <code>Theorem unit_test_XYZ : spec_XYZ. <em>[...]</em> Qed.</code></li>.</p>
+
+        <p>Furthermore, the <code>build.sh</code> script prints the axioms used by each proof,
+          i.e. it shows which assumptions were made without being proven. Ideally, only some
+          axioms describing some opaque types like the Tezos <code>Operation</code> type would
+          appear in that list of assumptions.</p>
+        
+        <p>This allows us to have a clean separation between the specification and the proofs, while
+          ensuring that every part of the specification is indeed proven.</p>
+        
+        <p>Thanks to this organization, in order to understand what aspects of the contract's behaviour
+          have been formally proven, it suffices to read the specification, as well as the definitions
+          and axioms transitively used by the specification. The checks performed by <code>build.sh</code>
+          ensure that the specification is proven, and its success is essentially equivalent to an
+          <em style="color:darkgreen">all-green</em> when writing conventional unit tests. <em>It is
+            worth noting that it is not necessary to read the proofs, as they are automatically
+            checked.</em></p>
+      </blockquote>
+      </section>
+    </article>
+  </main>
 </body>
 </html>

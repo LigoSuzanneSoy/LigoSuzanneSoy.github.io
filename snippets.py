@@ -49,9 +49,11 @@ with open('index.html', mode='w') as out:
           out.write(newline + htmlspecialchars(l))
       skipping = True
       injected[snippet] = True
-    if re.search('.*</pre>.*', htmline):
+    s = re.search('.*(</pre>.*)', htmline)
+    if s:
       skipping = False
-    if not skipping:
+      out.write(s.group(1))
+    elif not skipping:
       out.write(newline + htmline)
     newline='\n'
 

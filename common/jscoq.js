@@ -20,12 +20,13 @@ var jscoq_opts = {
     show:      jsCoqShow,
     focus:     false,
     replace:   true,
-    base_path: '../../node_modules/wacoq/',
+    base_path: '../node_modules/wacoq/',
     editor:    { mode: { 'company-coq': true }, className: 'jscoq code-tight' },
     init_pkgs: ['init'],
-    all_pkgs:  { '+': ['coq'], '../../coq-pkgs': ['software-foundations'] },
+    all_pkgs:  { '+': ['coq'], /*'../../coq-pkgs': ['software-foundations']*/ },
     init_import: ['utf8'],
-    implicit_libs: true
+    implicit_libs: true,
+    file_dialog: true
 };
 
 async function jsCoqLoad() {
@@ -35,7 +36,7 @@ async function jsCoqLoad() {
     });
 
     // - make page div focusable so that keyboard scrolling works
-    var page = document.querySelector('#page');
+    var page = document.querySelector('#tutorial');
     page.setAttribute('tabindex', -1);
     page.focus();
 
