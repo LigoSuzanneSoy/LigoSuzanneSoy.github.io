@@ -173,6 +173,10 @@ Definition main (ps : param * storage) : (list operation * storage) :=
       <pre class="code" id="snippet-contract-initial-storage">
 Definition initial_storage := Available.
 
+Definition identity {A : Type} (x : A) := x.
+Goal identity initial_storage = identity Available.
+Proof.
+
 (* ********************************************* *)
 (*                End of Contract                *)
 (* ********************************************* *)</pre>

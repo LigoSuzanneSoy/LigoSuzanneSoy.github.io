@@ -82,6 +82,10 @@
     "contract-initial-storage": [
       "Definition initial_storage := Available.",
       "",
+      "Definition identity {A : Type} (x : A) := x.",
+      "Goal identity initial_storage = identity Available.",
+      "Proof.",
+      "",
       "(* ********************************************* *)",
       "(*                End of Contract                *)",
       "(* ********************************************* *)"

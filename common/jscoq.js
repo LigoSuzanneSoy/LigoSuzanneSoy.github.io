@@ -38,6 +38,14 @@ function waitJsCoqLoaded(f) {
     onJsCoqLoaded[onJsCoqLoaded.length] = f;
   }
 }
+function jsCoqLoaded() {
+  //console.log('isJsCoqLoaded = true');
+  isJsCoqLoaded = true;
+  for (var i = 0; i < onJsCoqLoaded.length; i++) {
+    onJsCoqLoaded[i]();
+  }
+  onJsCoqLoaded=null;
+}
 
 async function jsCoqLoad() {
     // - remove empty code fragments (coqdoc generates some spurious ones)
@@ -72,12 +80,7 @@ async function jsCoqLoad() {
     $('#panel-wrapper #toolbar').prepend($('<button>').addClass('close').text('×')
         .on('click', () => coq.layout.hide()));
     
-    console.log('isJsCoqLoaded = true');
-    isJsCoqLoaded = true;
-    for (var i = 0; i < onJsCoqLoaded.length; i++) {
-        onJsCoqLoaded[i]();
-    }
-    onJsCoqLoaded=null;
+    jsCoqLoaded();
 }
 
 function jsCoqStart() {
