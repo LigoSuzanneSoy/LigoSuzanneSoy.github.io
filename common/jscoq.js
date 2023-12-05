@@ -11,8 +11,8 @@ function jsCoqInject() {
         .append($('<div id="jscoq-plug">').on('click', jsCoqStart));
 }
 
-var jsCoqShow = location.search === '?jscoq=on' ||
-                location.search !== '?jscoq=off' && localStorage.jsCoqShow === 'true';
+var jsCoqShow = location.search === '?jscoq=on' /*||
+                location.search !== '?jscoq=off' && localStorage.jsCoqShow === 'true'*/;
 
 var jscoq_ids  = ['pre.code, div.HIDEFROMHTML > pre.code'];
 var jscoq_opts = {

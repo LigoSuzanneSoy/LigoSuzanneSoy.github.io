@@ -167,11 +167,11 @@ function undoInsertTactic(inserted, errtext, errelt) {
   inserted.doc.replaceRange(' *)', c_end);
   var msg = $('<div class="insertTacticFailed"></div>');
   msg.append(errelt.clone());
-  inserted.doc.getEditor().addLineWidget(c_start.line, msg[0], {coverGutter: false, noHScroll: false});
+  var msgwidget = inserted.doc.getEditor().addLineWidget(c_start.line, msg[0], {coverGutter: false, noHScroll: false});
   var rm = $('<span style="border: thin solid red; border-radius: 1ex; padding: 0 0.35ex; background: pink; z-index:1000; transform: translate(1ex, -100%)">×</span>');
   rm.on('click', function() {
     inserted.doc.replaceRange('', c_start, {line:c_end.line, ch:c_end.ch+3});
-    msg.remove();
+    msgwidget.clear();
     rm.remove();
     inserted.doc.setCursor(c_start);
     coq.goCursor();
