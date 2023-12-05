@@ -10,10 +10,12 @@
   <link rel="alternate" href="https://ligolang.org/" />
   <script src="common/jquery-ui/external/jquery/jquery.js"></script>
   <link rel="stylesheet" type="text/css" href="style.css" />
+  <link rel="stylesheet" type="text/css" href="node_modules/wacoq/ui-css/coq-base.css" />
+  <link rel="stylesheet" type="text/css" href="common/css/jscoq.css" />
   <!--<link href="common/jquery-ui/jquery-ui.css" rel="stylesheet">
       <script src="common/jquery-ui/jquery-ui.js"></script>-->
 </head>
-<body>
+<body id="ide-wrapper" class="jscoq-main jscoq-ide layout-flex">
   <script src="common/jscoq.js"></script>
   <script src="my.js"></script>
   <script src="node_modules/wacoq/ui-js/jscoq-loader.js"></script>
@@ -665,6 +667,14 @@ Qed.
             worth noting that it is not necessary to read the proofs, as they are automatically
             checked.</em></p>
       </blockquote>
+      </section>
+      <section>
+        <h1>Further reading</h1>
+        <ul>
+          <li>Software Foundations (jscoq version)</li>
+          <li>CPDT</li>
+          <li>etc. TODO</li>
+        </ul>
       </section>
     </article>
   </main>

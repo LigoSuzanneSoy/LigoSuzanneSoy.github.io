@@ -54,7 +54,7 @@ async function jsCoqLoad() {
     });
 
     // - make page div focusable so that keyboard scrolling works
-    var page = document.querySelector('#tutorial');
+    var page = document.querySelector('#page');
     page.setAttribute('tabindex', -1);
     page.focus();
 
