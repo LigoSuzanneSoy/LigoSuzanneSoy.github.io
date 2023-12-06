@@ -12,8 +12,8 @@
   <link rel="stylesheet" type="text/css" href="style.css" />
   <link rel="stylesheet" type="text/css" href="node_modules/wacoq/ui-css/coq-base.css" />
   <link rel="stylesheet" type="text/css" href="common/css/jscoq.css" />
-  <!--<link href="common/jquery-ui/jquery-ui.css" rel="stylesheet">
-      <script src="common/jquery-ui/jquery-ui.js"></script>-->
+  <link href="common/jquery-ui/jquery-ui.css" rel="stylesheet">
+  <!--<script src="common/jquery-ui/jquery-ui.js"></script> Loaded after jscoq which loads its own version of jQuery-->
 </head>
 <body id="ide-wrapper" class="jscoq-main jscoq-ide layout-flex">
   <script src="common/jscoq.js"></script>
@@ -174,8 +174,67 @@ Definition main (ps : param * storage) : (list operation * storage) :=
       <p>Finally, we declare what should be the initial storage of the contract when deployed.</p>
       <pre class="code" id="snippet-contract-initial-storage">
 Definition initial_storage := Available.
+</pre>
 
+      <details class="toggle hidden">
+        <pre class="code" id="snippet-tactics-utils">
+Ltac subproof name :=
+  refine ?[name]; shelve.
+
+Ltac check_is_ctor ctor c :=
+match c with
+| ctor =&gt; idtac
+| ?f _ =&gt; check_is_ctor ctor f
+end.
+
+Tactic Notation &quot;when&quot; constr(ctor) ident_list(pat) &quot;as&quot; ident(H) :=
+idtac pat;
+intros *;
+let x := pat in
+idtac x;
+match goal with
+| |- _ = ?c -&gt; _ =&gt; check_is_ctor ctor c
+| _ =&gt; fail &quot;wrong constructor, expected&quot; ctor
+end;
+intro H.
+</pre>  
+      </details>
+
+      <pre class="code" id="snippet-tactics-test-demo">
 Definition identity {A : Type} (x : A) := x.
+Inductive bar := A | B : nat -&gt; nat -&gt; bar | C.
+
+Goal forall y : bar, y = y.
+intros y.
+case_eq y.
+- when A as H.
+  reflexivity.
+- when B n n0 as H.
+  reflexivity.
+- when C as H.
+  reflexivity.
+Qed.
+
+Goal forall x : bar, x = x.
+intros x.
+case_eq x.
+- subproof a.
+- subproof b.
+- subproof c.
+[a]:{
+  intros.
+  reflexivity.
+}
+[b]:{
+  intros.
+  reflexivity.
+}
+[c]:{
+  intros.
+  reflexivity.
+}
+Qed.
+
 Goal identity initial_storage = identity Available.
 Proof.
 

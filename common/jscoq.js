@@ -68,6 +68,8 @@ async function jsCoqLoad() {
     // - load and start jsCoq
     await JsCoq.load(jscoq_opts.base_path);
 
+    $(document.body).append($('<script src="common/jquery-ui/jquery-ui.js"></script>'));
+
     Deprettify.REPLACES.push(   // LF,PLF define their own versions (for Imp)
         [/∨/g, '\\/'], [/∧/g, '/\\'], [/↔/g, '<->'], [/≤/g, '<='], [/≠/g, '<>'],
         [/∈/g, '\\in']);

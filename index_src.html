@@ -12,8 +12,8 @@
   <link rel="stylesheet" type="text/css" href="style.css" />
   <link rel="stylesheet" type="text/css" href="node_modules/wacoq/ui-css/coq-base.css" />
   <link rel="stylesheet" type="text/css" href="common/css/jscoq.css" />
-  <!--<link href="common/jquery-ui/jquery-ui.css" rel="stylesheet">
-      <script src="common/jquery-ui/jquery-ui.js"></script>-->
+  <link href="common/jquery-ui/jquery-ui.css" rel="stylesheet">
+  <!--<script src="common/jquery-ui/jquery-ui.js"></script> Loaded after jscoq which loads its own version of jQuery-->
 </head>
 <body id="ide-wrapper" class="jscoq-main jscoq-ide layout-flex">
   <script src="common/jscoq.js"></script>
@@ -111,6 +111,14 @@
 
       <p>Finally, we declare what should be the initial storage of the contract when deployed.</p>
       <pre class="code" id="snippet-contract-initial-storage">
+      </pre>
+
+      <details class="toggle hidden">
+        <pre class="code" id="snippet-tactics-utils">
+        </pre>  
+      </details>
+
+      <pre class="code" id="snippet-tactics-test-demo">
       </pre>
     </section>
     <section>
