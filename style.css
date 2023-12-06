@@ -21,8 +21,12 @@ body {
 	margin: 2em auto;
 	font-family: Helvetica,Arial,sans-serif;
 	font-size: 120%;
-	line-height: 1.3em;
 	color: #333;
+	line-height: 1.3em;
+}
+
+#tutorial pre {
+	line-height: initial;
 }
 
 h1 {
@@ -203,4 +207,20 @@ html #ide-wrapper.layout-flex > #panel-wrapper {
 html #panel-wrapper > .flex-container {
   max-width: calc(38em - 1px);
   width: calc(45vw - 1px);
+}
+
+.in-code-button {
+  border: thin solid blue;
+  border-radius: 1ex;
+  padding: 0 0.35ex;
+  background: #c0cbff;
+  margin-left: 1ex;
+  font-size: calc(1em - 2px);
+  position: relative;
+  bottom: 1px;
+}
+
+.in-code-button.in-code-button-remove {
+  border-color: red;
+  background-color: pink;
 }

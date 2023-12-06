@@ -150,7 +150,7 @@ function getTxtIndentation(txt) {
   return { indent: indent, bullet: bullet, bulletAsSpace: bulletAsSpaces, bulletSpaceAfter: bulletSpaceAfter, spaces: spaces };
 }
 
-function getIndentation(cmdoc, line) {
+function getIndentation(cmdoc, line, ignoreLineContents) {
   if (line > 0) {
     return getTxtIndentation(cmdoc.getLine(line-1));
   } else {
@@ -190,6 +190,7 @@ function insertTacticHandler(msg) {
 
 function nextBulletType(b) {
   switch (b) {
+    case '': return '-';
     case '-': return '+';
     case '+': return '*';
     case '*': return '--';
@@ -199,6 +200,7 @@ function nextBulletType(b) {
     case '---': return '+++';
     case '+++': return '***';
     case '***': return '(* bullets too deep *)';
+    default: return '(* unknown bullet type: ' + b + ' *)';
   }
 }
 
@@ -214,7 +216,7 @@ function TODOTODOreplaceWithWidget() {
   var m = null;
   e = $('<span style="margin-left: 2ex; border: thin solid red">×</span>');
   e.click(function(ev) { console.log('muahaha'); m.clear() });
-  m = cmdoc.setBookmark({line:17, ch:14}, {widget:e[0]})
+  m = cmdoc.setBookmark({line:17, ch:14}, {widget:e[0]});
 }
 // ##########################################################################################################################
 
@@ -223,6 +225,7 @@ function insertTactic(tac, after, recursion) {
   //var orig_c = cmdoc.getCursor();
   var orig_c = coq.doc.sentences.last().end;
   var c = { line: orig_c.line, ch: orig_c.ch, sticky: orig_c.sticky };
+  var addedNewLine = false;
   if (cmdoc.getLine(c.line).trim() == '') {
     // we're on an empty line, let's write here.
   } else {
@@ -231,11 +234,11 @@ function insertTactic(tac, after, recursion) {
     c.line++; c.ch=0;
     if (cmdoc.getLine(c.line).trim() != '') {
       // push the existing content down one line
-      cmdoc.replaceRange('\n', c);
+      addedNewLine = true;
     }
   }
   
-  var indentation = getIndentation(cmdoc, c.line);
+  var indentation = getIndentation(cmdoc, c.line, true);
   if (typeof tac == 'function') {
     var ret = tac(indentation);
     tac = ret[0];
@@ -245,45 +248,61 @@ function insertTactic(tac, after, recursion) {
     after = (typeof after == 'undefined' ? '' : after).replaceAll('\n', '\n' + indentation.spaces);
   };
   console.log('inserting:', tac);
-  cmdoc.replaceRange(tac + after, c);
+  cmdoc.replaceRange(tac + after + (addedNewLine?'\n':''), c);
   var lines = tac.split('\n');
-  c.line += lines.length - 1;
-  c.ch = lines[lines.length-1].length;
-  cmdoc.setCursor(c);
+  var c_middle = { line: c.line + lines.length - 1, ch: c.ch + lines[lines.length-1].length };
+  var allLines = (tac + after).split('\n');
+  var c_end = {line: c.line + allLines.length - 1, ch: c.ch + allLines[allLines.length-1].length};
+  cmdoc.setCursor(c_middle);
   coq.goCursor();
   // TODO: check that there aren't any shelved goals etc.
   if (!recursion) {
-    insertTacticCallback = theInsertTacticCallback({ doc: cmdoc, orig_c: orig_c, tac: tac, c: c, startWithNewLine: '' /* TODO: fix this mess */ });
+    insertTacticCallback = theInsertTacticCallback({
+      doc: cmdoc,
+      c_start: orig_c,
+      text: tac,
+      c_middle: c_middle,
+      c_end: c_end,
+      addedNewLine: addedNewLine
+    });
   }
 }
 
 function undoInsertTactic(inserted, errtext, errelt) {
-  var c_start = {
-    line: inserted.orig_c.line,
-    ch: inserted.orig_c.ch,
-    sticky: false,
-  };
-  if (inserted.startWithNewLine) {
-    c_start.line++;
-    c_start.ch = 0;
-  }
-  var c_end = { line: c_start.line, ch: c_start.ch + inserted.tac.length + 3 /* for the '(* ' inserted */ };
-  console.log(inserted, c_start, c_end);
-  inserted.doc.replaceRange('(* ', c_start);
+  var c_end = { line: inserted.c_end.line, ch: inserted.c_end.ch + inserted.text.length + 3 /* for the '(* ' inserted */ };
+  inserted.doc.replaceRange('(* ', inserted.c_start);
   inserted.doc.replaceRange(' *)', c_end);
   var msg = $('<div class="insertTacticFailed"></div>');
   msg.append(errelt.clone());
-  var msgwidget = inserted.doc.getEditor().addLineWidget(c_start.line, msg[0], {coverGutter: false, noHScroll: false});
-  var rm = $('<span style="border: thin solid red; border-radius: 1ex; padding: 0 0.35ex; background: pink; z-index:1000; transform: translate(1ex, -100%)">×</span>');
+  var msgwidget = inserted.doc.getEditor().addLineWidget(inserted.c_end.line, msg[0], {coverGutter: false, noHScroll: false});
+  var bookmark = null;
+  var rm = $('<span class="in-code-button in-code-button-remove">× remove</span>');
   rm.on('click', function() {
-    inserted.doc.replaceRange('', c_start, {line:c_end.line, ch:c_end.ch+3});
     msgwidget.clear();
-    rm.remove();
-    inserted.doc.setCursor(c_start);
-    coq.goCursor();
+    bookmark.clear();
+    var c_rm_end = {line:c_end.line, ch:c_end.ch+3};
+    // check that we're removing what we think we're removing!
+    console.log('<'+'(* ' + inserted.text + ' *)'+'>');
+    console.log('<'+inserted.doc.getRange(inserted.c_start, c_end)+'>');
+    if ('(* ' + inserted.text + ' *)' == inserted.doc.getRange(inserted.c_start, c_end)) {
+      if (inserted.addedNewLine) {
+        c_rm_end.line++;
+        c_rm_end.ch = 0;
+      }
+      inserted.doc.replaceRange('', inserted.c_start, c_rm_end);
+      inserted.doc.setCursor(inserted.c_start);
+      coq.goCursor();
+      // Quick & dirty hack around the problems with jsCoq cancelling the last sentence when the cursor is exactly on it
+      // + not updating the sentence's end position even if the comments after it have changed.
+      // Should patch coq.goCursor instead of this hack.
+      //coq.goPrev();
+      //coq.goCursor();
+    }
   });
-  inserted.doc.getEditor().addWidget({line:c_end.line, ch:c_end.ch+3}, rm[0], true);
-  inserted.doc.setCursor({ line: c_end.line+1, ch: 0, sticky: false });
+  //inserted.doc.getEditor().addWidget({line:c_end.line, ch:c_end.ch+3}, rm[0], true);
+  bookmark = inserted.doc.setBookmark({line:c_end.line, ch:c_end.ch+3}, {widget:rm[0]})
+
+  inserted.doc.setCursor(c_end);
   coq.goCursor();
 }
 
@@ -375,7 +394,7 @@ function floating_toolbar(target) {
   bar.addClass('floating-toolbar');
 
   // Note: this could attempt to remove the toolbar
-  var rmOnClickBackground = function(ev) { console.log('CLICKED GOAL_TEXT'); $(this).off(ev); bar.remove(); return true; };
+  var rmOnClickBackground = function(ev) { $(this).off(ev); bar.remove(); return true; };
   $('#goal-text').on('click', rmOnClickBackground);
 
   var close = $('<span/>');
@@ -430,12 +449,12 @@ function my_init_hover_actions() {
         //var res2 = await queryVernac('Check ltac:(let x := fresh "inspect" in intro x; case_eq x; intros; exact I) : forall x : ' + type + ', True.');
         var constructors = await queryVernac(
           'try(' +
-          '  cut (nat-> True); cycle 1;'+
+          '  cut ((' + type + ') -> True); cycle 1;'+
           '  [' +
           '    let x := fresh "inspect" in intro x; case_eq x;' +
           '    repeat(' +
           '      match goal with' +
-          '      |- _ -> _ -> True => intro' +
+          '      |- _ -> _ -> _ => intro' +
           '      end' +
           '    );' +
           '    match goal with' +
