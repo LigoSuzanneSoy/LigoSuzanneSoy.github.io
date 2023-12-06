@@ -188,10 +188,7 @@ match c with
 end.
 
 Tactic Notation &quot;when&quot; constr(ctor) ident_list(pat) &quot;as&quot; ident(H) :=
-idtac pat;
-intros *;
-let x := pat in
-idtac x;
+intros pat;
 match goal with
 | |- _ = ?c -&gt; _ =&gt; check_is_ctor ctor c
 | _ =&gt; fail &quot;wrong constructor, expected&quot; ctor
@@ -205,12 +202,18 @@ Definition identity {A : Type} (x : A) := x.
 Inductive bar := A | B : nat -&gt; nat -&gt; bar | C.
 
 Goal forall y : bar, y = y.
+(* Run until here, with the GUI try to reproduce the proof below. *)
+
 intros y.
 case_eq y.
 - when A as H.
   reflexivity.
 - when B n n0 as H.
-  reflexivity.
+  case_eq n.
+  + when 0 as Hn.
+    reflexivity.
+  + when  S n1  as Hn.
+    reflexivity.
 - when C as H.
   reflexivity.
 Qed.

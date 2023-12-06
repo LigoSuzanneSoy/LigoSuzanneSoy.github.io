@@ -137,6 +137,48 @@ function my_init2() {
   };*/
 }
 
+function getTxtIndentation(txt) {
+  var m = txt.match(/^( *)([-+*]*)( *)/);
+  var indent = m[1];
+  var bullet = m[2];
+  var bulletSpaceAfter = m[3]
+  var bulletAsSpaces = '';
+  for (var i = 0; i < bullet.length; i++) {
+    bulletAsSpaces += ' ';
+  }
+  var spaces = indent + bulletAsSpaces + bulletSpaceAfter;
+  return { indent: indent, bullet: bullet, bulletAsSpace: bulletAsSpaces, bulletSpaceAfter: bulletSpaceAfter, spaces: spaces };
+}
+
+function getIndentation(cmdoc, line) {
+  if (line > 0) {
+    return getTxtIndentation(cmdoc.getLine(line-1));
+  } else {
+    return '';
+  }
+}
+
+function getBulletTree(cmdoc, line) {
+  var tree = [];
+  for (var i = line-1; i > 0; i--) {
+    var indentation = getTxtIndentation(cmdoc.getLine(i));
+    if (indentation.bullet != '' && (tree.length == 0 || indentation.indent < tree[tree.length-1].indent)) {
+      tree[tree.length] = indentation;
+    }
+    if (   i > 1
+        && tree.length > 0
+        && indentation.bullet == tree[tree.length-1].bullet
+        && indentation.indent == tree[tree.length-1].indent) {
+      // TODO: skip comments & empty lines to find the real semantic prevLine
+      var prevLine = getTxtIndentation(cmdoc.getLine(i-1));
+      if (indentation.indent == prevLine.indent && prevLine.bullet == '') {
+        tree[tree.length-1].originator = { cmdoc: cmdoc, line: i-1 };
+      }
+    }
+  }
+  return tree;
+}
+
 var insertTacticCallback = null;
 function insertTacticHandler(msg) {
   if (insertTacticCallback) {
@@ -146,8 +188,37 @@ function insertTacticHandler(msg) {
   }
 }
 
+function nextBulletType(b) {
+  switch (b) {
+    case '-': return '+';
+    case '+': return '*';
+    case '*': return '--';
+    case '--': return '++';
+    case '++': return '**';
+    case '**': return '---';
+    case '---': return '+++';
+    case '+++': return '***';
+    case '***': return '(* bullets too deep *)';
+  }
+}
+
+// ##########################################################################################################################
+function TODOTODOreplaceWithWidget() {
+  var m = null;
+  var w = $('<span style="border: thin solid red">repl</span>');
+  w.on('click', function(ev) { console.log('muahaha'); m.clear() });
+  m = cmdoc.markText({line:17, ch:2}, {line:17, ch:14}, {replacedWith:e[0]})
+  m.on('clear', function(ev) { console.log('cleared', ev); });
+
+
+  var m = null;
+  e = $('<span style="margin-left: 2ex; border: thin solid red">×</span>');
+  e.click(function(ev) { console.log('muahaha'); m.clear() });
+  m = cmdoc.setBookmark({line:17, ch:14}, {widget:e[0]})
+}
+// ##########################################################################################################################
+
 function insertTactic(tac, after, recursion) {
-  console.log('inserting:', tac);
   var cmdoc = coq.provider.currentFocus.editor.getDoc();
   //var orig_c = cmdoc.getCursor();
   var orig_c = coq.doc.sentences.last().end;
@@ -164,7 +235,17 @@ function insertTactic(tac, after, recursion) {
     }
   }
   
-  cmdoc.replaceRange(tac + (typeof after == 'undefined' ? '' : after), c);
+  var indentation = getIndentation(cmdoc, c.line);
+  if (typeof tac == 'function') {
+    var ret = tac(indentation);
+    tac = ret[0];
+    after = ret[1];
+  } else {
+    tac = indentation.spaces + tac.replaceAll('\n', '\n' + indentation.spaces);
+    after = (typeof after == 'undefined' ? '' : after).replaceAll('\n', '\n' + indentation.spaces);
+  };
+  console.log('inserting:', tac);
+  cmdoc.replaceRange(tac + after, c);
   var lines = tac.split('\n');
   c.line += lines.length - 1;
   c.ch = lines[lines.length-1].length;
@@ -224,10 +305,10 @@ function theInsertTacticCallback(inserted) {
     }
     if ($("#goal-text").find(".no-goals").length == 1) {
       if ($("#goal-text").find(".no-goals").text() == 'No more goals.') {
-        insertTactic('Qed.', '', true);
+        insertTactic((_ => ['Qed.', '']), '', true);
       } else if ($("#goal-text").find(".no-goals + .aside").length == 1) {
         var bullet = $("#goal-text").find(".no-goals + .aside").text().match(/Focus next goal with bullet (.*)\./)[1]
-        console.log('bullet:', bullet);
+        console.log('next bullet:', bullet);
         
         // TODO: skip the next empty lines if any.
         var last = coq.doc.sentences.last();
@@ -238,7 +319,19 @@ function theInsertTacticCallback(inserted) {
           cmdoc.setCursor({line: last.end.line+1, ch: nextline.length });
           coq.goCursor();
         } else {
-          insertTactic(bullet + ' ', '', true);
+          var indentation = '';
+          var originator = '';
+          var bt = getBulletTree(cmdoc, last.end.line+1);
+          for (var i = 0; i < bt.length; i++) {
+            if (bt[i].bullet == bullet) {
+              indentation = bt[i].indent;
+              if (bt[i].originator) {
+                originator = '(* ' +  bt[i].originator.cmdoc.getLine(bt[i].originator.line) + ' *)';
+              }
+              break;
+            }
+          }
+          insertTactic((_ => [indentation + bullet + ' ' + originator, '']), '', true);
         }
       }
       return true; // stop tracking this execution.
@@ -249,7 +342,7 @@ function theInsertTacticCallback(inserted) {
   }
 }
 
-function quick_and_dirty_parse_answer(answer) {
+function quick_and_dirty_parse_answer(msg) {
   var res = [];
   var f = function(m) {
     if (m[0] == 'Pp_glue') {
@@ -266,24 +359,35 @@ function quick_and_dirty_parse_answer(answer) {
       console.log('my.js: unknown token in vernac response', m);
     }
   };
-  f(answer[0].msg);
+  f(msg);
   return res;
 }
 
 async function queryVernac(q) {
-  var answer = await coq.coq.queryPromise(0, ['Vernac', q]);
-  return quick_and_dirty_parse_answer(answer);
+  var answers = await coq.coq.queryPromise(0, ['Vernac', q]);
+  return answers.map(a => quick_and_dirty_parse_answer(a.msg));
 }
+
+async function queryVernac1(q) { var res = await queryVernac(q); return res[0]; }
 
 function floating_toolbar(target) {
   var bar = $('<div/>');
   bar.addClass('floating-toolbar');
 
+  // Note: this could attempt to remove the toolbar
+  var rmOnClickBackground = function(ev) { console.log('CLICKED GOAL_TEXT'); $(this).off(ev); bar.remove(); return true; };
+  $('#goal-text').on('click', rmOnClickBackground);
+
   var close = $('<span/>');
   close
     .addClass('floating-toolbar-button')
     .text('×')
-    .on('click', function() { bar.remove(); });
+    .on('click', function(ev) {
+      ev.stopPropagation();
+      bar.remove();
+      $('#goal-text').off('click', rmOnClickBackground);
+      return false;
+    });
   bar.append(close);
 
   bar.appendTo(target.parent());
@@ -294,7 +398,13 @@ function floating_toolbar(target) {
     button
       .addClass('floating-toolbar-button')
       .text(text)
-      .on('click', f)
+      .on('click', function(ev) {
+        ev.stopPropagation();
+        bar.remove();
+        $('#goal-text').off('click', rmOnClickBackground);
+        f();
+        return false;
+      })
       .insertBefore(close)
     this.position({ my: "center bottom", at: "center top+0.5ex", of: target, collision: "flipfit", within: $('#goal-text') });
   };
@@ -310,50 +420,40 @@ function my_init_hover_actions() {
 
     var bar = floating_toolbar(target);
     bar.addButton('unfold', function() {
-      bar.remove(); insertTactic('unfold ' + target_text + '.');
+      insertTactic('unfold ' + target_text + '.');
     });
     bar.addButton('case_eq', async function() {
-      bar.remove();
       var constructors = [];
-      var res = await queryVernac('Check ' + target_text + ' .');
+      var res = await queryVernac1('Check ' + target_text + ' .');
       if (res[1] == ':' && res.length == 3) {
         var type = res[2];
-        var res2 = await queryVernac('Check ltac:(let x := fresh "inspect" in intro x; case_eq x; intros; exact I) : forall x : ' + type + ', True.');
-        var toNextPipe = function(j) { while (j < res2.length && res2[j] != '|') { j++; } return j; };
-        var toNextConstructor = function(j) {
-          while (j < res2.length && ! /\p{Lu}/u.test(res2[j][0])) { j++; } // move till next Uppercase identifier
-          return j;
-        };
-        var toNextBigRightArrow = function(j) { while (j < res2.length && res2[j] != '=>') { j++; } return j; };
-        var i = toNextConstructor(toNextPipe(0));
-        while (i < res2.length) {
-          var j = toNextBigRightArrow(i);
-          constructors[constructors.length] = res2.slice(i, j);
-          i = toNextConstructor(toNextPipe(j));
-        }
-        /*
-        var res2 = await queryVernac('Print ' + type + '.');
-        console.log(res2);
-        for (var i = 0; i < res2.length && res2[i] != ':='; i++);
-        if (res2[i] != ':=') {
-          // return false;
-        } else {
-          var toNextConstructor = function(j) {
-            while (j < res2.length && ! /\p{Lu}/u.test(res2[j][0])) { j++; } // move till next Uppercase identifier
-            return j;
-          };
-          var toNextPipe = function(j) {
-            while (j < res2.length && res2[j] != '|') { j++; } // move till next pipe
-            return j;
-          }
-          for (var j = toNextConstructor(i+1); j < res2.length; j = toNextConstructor(toNextPipe(j))) {
-            constructors[constructors.length] = res2[j];
-          }
-        }
-        */
+        //var res2 = await queryVernac('Check ltac:(let x := fresh "inspect" in intro x; case_eq x; intros; exact I) : forall x : ' + type + ', True.');
+        var constructors = await queryVernac(
+          'try(' +
+          '  cut (nat-> True); cycle 1;'+
+          '  [' +
+          '    let x := fresh "inspect" in intro x; case_eq x;' +
+          '    repeat(' +
+          '      match goal with' +
+          '      |- _ -> _ -> True => intro' +
+          '      end' +
+          '    );' +
+          '    match goal with' +
+          '    |- ?inspect = ?T -> True => idtac T' +
+          '    end;' +
+          '    intro; exact I' +
+          '  |' +
+          '    fail' +
+          '  ]' +
+          ').');
+        constructors = constructors.map(c => c.join(' '));
+        constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substr(1, c.length-2) : c);
+        insertTactic(indent => {
+          var bulletType = nextBulletType(indent.bullet);
+          var bullets = constructors.map(c => '\n' + indent.spaces + bulletType + ' when ' + c + ' as H' + target_text.trim() + '.');
+          return [indent.spaces + 'case_eq ' + target_text + '.' + bullets[0], bullets.slice(1).join('')]
+        });
       }
-      var bullets = constructors.map(c => '\n- when ' + c.join(' ') + ' as H' + target_text.trim() + '.');
-      insertTactic('case_eq ' + target_text + '.' + bullets[0], bullets.slice(1).join(''));
     });
   });
   $("#goal-text").on("click", ".coq-env hr + .constr\\.notation, .coq-env hr + * .constr\\.notation", function (ev) {
@@ -366,14 +466,14 @@ function my_init_hover_actions() {
     } else if (target_text == '→') {
       var bar = floating_toolbar(target);
       bar.addButton('intro', function() {
-        queryVernac('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
+        queryVernac1('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
           insertTactic('intro ' + id + '.');
         })
       });
     } else if (target_text == '∀') {
       var bar = floating_toolbar(target);
       bar.addButton('intro', function() {
-        queryVernac('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
+        queryVernac1('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
           insertTactic('intro ' + id + '.');
         })
       });
