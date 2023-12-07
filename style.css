@@ -1,107 +1,107 @@
 html {
-	margin: 0;
-    padding: 0;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-    margin: 0;
-    padding: 0;
-	background: #888;
-	-webkit-transition: background-color 1000ms linear;
-	-ms-transition: background-color 1000ms linear;
-	transition: background-color 1000ms linear;
+  margin: 0;
+  padding: 0;
+  background: #888;
+  -webkit-transition: background-color 1000ms linear;
+  -ms-transition: background-color 1000ms linear;
+  transition: background-color 1000ms linear;
 }
 
 #tutorial {
-	background: white;
-	border: thick solid #ddd;
-	border-radius: 2em;
-	padding: 0.5em 2em 1.5em;
-	max-width: 40em;
-	margin: 2em auto;
-	font-family: Helvetica,Arial,sans-serif;
-	font-size: 120%;
-	color: #333;
-	line-height: 1.3em;
+  background: white;
+  border: thick solid #ddd;
+  border-radius: 2em;
+  padding: 0.5em 2em 1.5em;
+  max-width: 40em;
+  margin: 2em auto;
+  font-family: Helvetica,Arial,sans-serif;
+  font-size: 120%;
+  color: #333;
+  line-height: 1.3em;
 }
 
 #tutorial pre {
-	line-height: initial;
+  line-height: initial;
 }
 
 h1 {
-	color: #222;
+  color: #222;
 }
 
 code {
-	color: #04c;
-	background: #eee;
-	padding: 0.1em 0.3em;
+  color: #04c;
+  background: #eee;
+  padding: 0.1em 0.3em;
 }
 
 input, select {
-	padding: 0.3em !important;
+  padding: 0.3em !important;
 }
 
 pre em {
-	color: red;
-	font-style: normal;
+  color: red;
+  font-style: normal;
 }
 
 kbd {
-	color: #444;
-	background-color: aliceblue;
-	border: thin solid gray;
-	border-radius: .5ex;
-	padding-left: .5ex;
-	padding-right: .5ex;
+  color: #444;
+  background-color: aliceblue;
+  border: thin solid gray;
+  border-radius: .5ex;
+  padding-left: .5ex;
+  padding-right: .5ex;
 }
 
 pre kbd {
-	color: #04c;
-	border: none;
-	border-radius: 0;
-	padding-left: initial;
-	padding-right: initial;
+  color: #04c;
+  border: none;
+  border-radius: 0;
+  padding-left: initial;
+  padding-right: initial;
 }
 
 pre {
-	overflow: auto;	
-	background: #eee;
-	border: thin solid #ccc;
-	padding: .5em;
-	border-radius: .5em;
+  overflow: auto;	
+  background: #eee;
+  border: thin solid #ccc;
+  padding: .5em;
+  border-radius: .5em;
 }
 
 hr {
-	margin: 1em 25%;
-	height: .35ex;
-	color: #aaa;
-	background-color: #aaa;
-	border: none;
-	border-radius: .175ex;
+  margin: 1em 25%;
+  height: .35ex;
+  color: #aaa;
+  background-color: #aaa;
+  border: none;
+  border-radius: .175ex;
 }
 
 /* TODO: use a technique like tinytypo's to change the quotes based on the language?
  * https://github.com/tetue/tinytypo/blob/5f7411746c8c4d634ac8cd14c730b86f4ffd1813/css/typo.css#L397
  */
 blockquote {
-    border-left: 0.85ex solid #ccc;
-    padding: 0.8ex 1ex;
-    background: #f0f0f0;
-    margin: 1em 2em;
+  border-left: 0.85ex solid #ccc;
+  padding: 0.8ex 1ex;
+  background: #f0f0f0;
+  margin: 1em 2em;
 }
 
 /* An <ul> appearing at the end of a blockquote has too much vertical space following it. */
 ul:last-child {
-	margin-bottom: .25ex
+  margin-bottom: .25ex
 }
 
 .varblock {
-	display: inline-block;
-	border: thin solid #888;
-	padding: 0 .5em;
-	border-radius: .5em;
+  display: inline-block;
+  border: thin solid #888;
+  padding: 0 .5em;
+  border-radius: .5em;
 }
 
 /* Coqueligot-specific styles */
@@ -167,12 +167,12 @@ html .waiting #jscoq-plug {
 }
 
 .floating-toolbar {
-	position: absolute;
-	z-index: 1000;
-	border: thin solid rgb(117, 117, 210);
-	border-radius: 1ex;
-	padding: 0;
-	background: rgb(192, 214, 222);
+  position: absolute;
+  z-index: 1000;
+  border: thin solid rgb(117, 117, 210);
+  border-radius: 1ex;
+  padding: 0;
+  background: rgb(192, 214, 222);
 }
 
 .floating-toolbar-button {
@@ -239,4 +239,137 @@ html #panel-wrapper > .flex-container {
   left: -1.3ex;
   padding: 0;
   margin: 0;
+}
+
+.circle-around-hidden {
+  filter: blur(20px) opacity(0);
+}
+
+@property --circle-around-size {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 36%;
+}
+
+@property --circle-around-spread {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 7%;
+}
+
+@property --circle-around-color {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: yellowgreen;
+}
+
+@property --circle-around-end {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0.4;
+}
+
+@property --circle-around-full-loops {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 2;
+}
+
+@property --circle-around-duration {
+  syntax: '<time>';
+  inherits: false;
+  initial-value: 2.5s;
+}
+
+.circle-around-hidden {
+  filter: blur(20px) opacity(0);
+}
+
+.circle-around {
+  position: absolute;
+  z-index: 1000;
+  /*border-radius: 5em;*/
+  animation: opacity-circle-animation var(--circle-around-duration) ease calc(var(--circle-around-full-loops) + var(--circle-around-end)) forwards,
+	         color-circle-animation var(--circle-around-duration) linear calc(var(--circle-around-full-loops) + var(--circle-around-end)) forwards,
+	         size-circle-animation var(--circle-around-duration) linear calc(var(--circle-around-full-loops) + var(--circle-around-end)) forwards,
+	         size-circle-animation-end calc(var(--circle-around-duration) * var(--circle-around-end)) cubic-bezier(1, 0, 0, 1) calc(var(--circle-around-duration) * var(--circle-around-full-loops)) 1 forwards;
+  transition: filter 1s linear;
+  background: radial-gradient(ellipse at center, transparent calc(var(--circle-around-size) - var(--circle-around-spread)),var(--circle-around-color) var(--circle-around-size),transparent calc(var(--circle-around-size) + var(--circle-around-spread)));
+}
+
+/*@keyframes opacity-circle-animation {
+  0% {
+	opacity: 0;
+	animation-timing-function: cubic-bezier(0.5, 0, 0.1, 1)
+  }
+  40% {
+    opacity: 1;
+	animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes size-circle-animation {
+  0% {
+    outline: forestgreen solid 0.3ex;
+    outline-offset: 0ex;
+  }
+  100% {
+    outline: yellowgreen solid 1ex;
+    outline-offset: 4ex;
+  }
+}*/
+
+@keyframes opacity-circle-animation {
+  0% {
+	opacity: 0;
+	animation-timing-function: cubic-bezier(0.5, 0, 0.1, 1)
+  }
+  40% {
+    opacity: 1;
+	animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes color-circle-animation {
+  0% {
+    animation-timing-function: ease-out;
+    --circle-around-color: forestgreen;
+  }
+  100% {
+    --circle-around-color: yellowgreen;
+  }
+}
+
+@keyframes size-circle-animation {
+  0% {
+    animation-timing-function: ease-in-out;
+    --circle-around-size: 20%;
+    --circle-around-spread: 5%;
+    /*outline: forestgreen solid 0.3ex;*/
+    /*outline-offset: 0ex;*/
+  }
+  100% {
+    --circle-around-size: 60%;
+    --circle-around-spread: 10%;
+    /*outline: yellowgreen solid 1ex;*/
+    /*outline-offset: 4ex;*/
+  }
+}
+
+@keyframes size-circle-animation-end {
+  0% {
+    animation-timing-function: ease-in-out;
+    --circle-around-size: 20%;
+    --circle-around-spread: 5%;
+  }
+  100% {
+    --circle-around-size: calc(20% + (40% * var(--circle-around-end)));
+    --circle-around-spread: calc(5% + (5% * var(--circle-around-end)));
+  }
 }
