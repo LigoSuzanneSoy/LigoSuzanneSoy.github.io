@@ -608,4 +608,6 @@ waitJsCoqReady(function() {
   coq.provider.currentFocus = cm;
   cm.editor.focus();
   coq.goCursor();
+
+  $(document.body).on('click', '.CodeMirror-linenumber', function(ev) { window.location.href = '#' + $(ev.target).text(); });
 });
