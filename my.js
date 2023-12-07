@@ -545,7 +545,7 @@ function my_init_hover_actions() {
           '  ]' +
           ').');
         constructors = constructors.map(c => c.join(' '));
-        constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substr(1, c.length-2).trim() : c);
+        constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substring(1, c.length-1).trim() : c);
         insertTactic(indent => {
           var bulletType = nextBulletType(indent.bullet);
           var bullets = constructors.map(c => [
@@ -596,3 +596,16 @@ function my_init_hover_actions() {
 waitJsCoqLoaded(my_init);
 waitJsCoqReady(my_init2);
 waitJsCoqReady(my_init_hover_actions);
+waitJsCoqReady(function() {
+  var line = parseInt(window.location.hash.substring(1)) || 91;
+  var cm = coq.provider.snippets.find(cm => {
+    var first = cm.editor.options.firstLineNumber;
+    return first <= line && first + cm.editor.lastLine() >= line;
+  });
+  cm.editor.scrollIntoView(line - cm.editor.options.firstLineNumber)
+  var l = line - cm.editor.options.firstLineNumber;
+  cm.editor.setCursor({ line: l, ch: cm.editor.getLine(l).length });
+  coq.provider.currentFocus = cm;
+  cm.editor.focus();
+  coq.goCursor();
+});

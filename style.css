@@ -218,6 +218,7 @@ html #panel-wrapper > .flex-container {
   font-size: calc(1em - 2px);
   position: relative;
   bottom: 1px;
+  cursor: pointer;
 }
 
 .in-code-button.in-code-button-remove {
