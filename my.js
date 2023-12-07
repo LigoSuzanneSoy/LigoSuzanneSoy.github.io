@@ -1,5 +1,7 @@
 // my.js
 
+var globalLastGoalInfo;
+
 // TODO:
 // multiple options when point-and-clicking
 // "Run" button under each code block
@@ -119,6 +121,9 @@ function coqActivityUIFeedback(msg) {
     console.warn('unknown onmessage in my.js', msg.data);
   }
 
+  if (msg.data && msg.data[0] == 'GoalInfo') {
+    globalLastGoalInfo = msg;
+  }
   if (msg.data && msg.data[0] == 'GoalInfo' && msg.data[2] && msg.data[2].goals && msg.data[2].goals.length > 0) {
     coq.layout.show();
   }
@@ -138,22 +143,29 @@ function my_init2() {
 }
 
 function getTxtIndentation(txt) {
-  var m = txt.match(/^( *)([-+*]*)( *)/);
-  var indent = m[1];
-  var bullet = m[2];
-  var bulletSpaceAfter = m[3]
-  var bulletAsSpaces = '';
-  for (var i = 0; i < bullet.length; i++) {
-    bulletAsSpaces += ' ';
+  var mm = txt.match(/^\[(.*)\]:\{$/);
+  if (mm) {
+    var bullet = mm[1];
+    return { indent: '', bullet: bullet, bulletAsSpace: '  ', bulletSpaceAfter: '', spaces: '  ', unshelved: true };
+  } else {
+    var m = txt.match(/^( *)([-+*]*)( *)/);
+    var indent = m[1];
+    var bullet = m[2];
+    var bulletSpaceAfter = m[3]
+    var bulletAsSpaces = '';
+    for (var i = 0; i < bullet.length; i++) {
+      bulletAsSpaces += ' ';
+    }
+    var spaces = indent + bulletAsSpaces + bulletSpaceAfter;
+    return { indent: indent, bullet: bullet, bulletAsSpace: bulletAsSpaces, bulletSpaceAfter: bulletSpaceAfter, spaces: spaces, unshelved: false };
   }
-  var spaces = indent + bulletAsSpaces + bulletSpaceAfter;
-  return { indent: indent, bullet: bullet, bulletAsSpace: bulletAsSpaces, bulletSpaceAfter: bulletSpaceAfter, spaces: spaces };
 }
 
 function getIndentation(cmdoc, line, ignoreLineContents) {
   if (line > 0) {
     return getTxtIndentation(cmdoc.getLine(line-1));
   } else {
+    // TODO: this looks like a type error?!
     return '';
   }
 }
@@ -249,11 +261,10 @@ function insertTactic(tacs, recursion) {
   }
 
   var text = tacs.filter(t => typeof t == 'string' || t instanceof String).join('');
-  cmdoc.replaceRange(text + (addedNewLine?'\n':''), c);
-  console.log('inserted:', text);
 
   var c_middle = null;
   var pos = { line: c.line, ch: c.ch };
+  var todo = [];
   for (var i = 0; i < tacs.length; i++) {
     if (typeof tacs[i] == 'string' || tacs[i] instanceof String) {
       var lines = tacs[i].split('\n');
@@ -263,7 +274,7 @@ function insertTactic(tacs, recursion) {
       }
     } else {
       if (tacs[i] instanceof $) {
-        tacs[i].data('bookmark', cmdoc.setBookmark(pos, {widget:tacs[i][0]}));
+        todo[todo.length] = ((i, pos) => () => tacs[i].data('bookmark', cmdoc.setBookmark(pos, {widget:tacs[i][0]})))(i, pos);
       } else if (tacs[i] === CURSOR) {
         c_middle = pos;
       }
@@ -271,6 +282,15 @@ function insertTactic(tacs, recursion) {
   }
   if (c_middle === null) { c_middle = pos; }
   c_end = pos;
+
+  console.log('GETRANGE', c, c_end, cmdoc.getRange(c, c_end));
+  if (text != cmdoc.getRange(c, c_end)) {
+    cmdoc.replaceRange(text + (addedNewLine?'\n':''), c);
+    console.log('inserted:', text);
+  } else {
+    console.log('used existing:', text);
+  }
+  for (var i = 0; i < todo.length; i++) { todo[i](); }
 
   //var lines = tac.split('\n');
   //var c_middle = { line: c.line + lines.length - 1, ch: c.ch + lines[lines.length-1].length };
@@ -329,10 +349,25 @@ function undoInsertTactic(inserted, errtext, errelt) {
   coq.goCursor();
 }
 
+function closeUnshelved() {
+  var last = coq.doc.sentences.last();
+  var cmdoc = last.sp.editor;
+  var bulletTree = getBulletTree(cmdoc, last.end.line+1);
+  if (bulletTree[0].unshelved && cmdoc.getLine(last.end.line+1) == '}') {
+    cmdoc.setCursor({line: last.end.line+1, ch:1});
+    coq.goCursor();
+    return true;
+  } else {
+    // TODO: add the closing '}' if missing.
+    return false;
+  }
+}
+
 function theInsertTacticCallback(inserted) {
   var trackingError = null;
 
   return function(msg) {
+    console.log('===========================================', msg)
     if (trackingError) {
       var e = $('#query-panel .Error[data-coq-sid="' + trackingError + '"]');
       if (e.length == 1) {
@@ -347,7 +382,28 @@ function theInsertTacticCallback(inserted) {
     }
     if ($("#goal-text").find(".no-goals").length == 1) {
       if ($("#goal-text").find(".no-goals").text() == 'No more goals.') {
-        insertTactic((_ => 'Qed.'), true);
+        closeUnshelved();
+        insertTactic((_ => ['Qed.']), true);
+      } else if ($("#goal-text").find(".no-goals").text() == 'All the remaining goals are on the shelf.') {
+        var goalInfo = globalLastGoalInfo;
+        console.log('SHELF:', 'All the remaining goals are on the shelf.', goalInfo);
+        if (goalInfo && goalInfo.data && goalInfo.data[2]) {
+          if (closeUnshelved()) {
+            return false;
+          } else {
+            var shelfNamed = goalInfo.data[2].shelf.map(s => s.info.name[0] == 'Id' ? s.info.name[1] : null).filter(s => s !== null);
+            if (shelfNamed.length > 0) {
+              insertTactic(_indentation => 
+                shelfNamed.map((name, idx) => [
+                  (idx == 0) ? '' : '\n',
+                  '[' + name + ']:{\n',
+                  (idx == 0) ? CURSOR : '',
+                  '}'
+                ]).flat()
+              );
+            }
+          }
+        }
       } else if ($("#goal-text").find(".no-goals + .aside").length == 1) {
         var bullet = $("#goal-text").find(".no-goals + .aside").text().match(/Focus next goal with bullet (.*)\./)[1]
         console.log('next bullet:', bullet);
