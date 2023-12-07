@@ -220,7 +220,9 @@ function TODOTODOreplaceWithWidget() {
 }
 // ##########################################################################################################################
 
-function insertTactic(tac, after, recursion) {
+var CURSOR = {};
+
+function insertTactic(tacs, recursion) {
   var cmdoc = coq.provider.currentFocus.editor.getDoc();
   //var orig_c = cmdoc.getCursor();
   var orig_c = coq.doc.sentences.last().end;
@@ -239,20 +241,41 @@ function insertTactic(tac, after, recursion) {
   }
   
   var indentation = getIndentation(cmdoc, c.line, true);
-  if (typeof tac == 'function') {
-    var ret = tac(indentation);
-    tac = ret[0];
-    after = ret[1];
-  } else {
-    tac = indentation.spaces + tac.replaceAll('\n', '\n' + indentation.spaces);
-    after = (typeof after == 'undefined' ? '' : after).replaceAll('\n', '\n' + indentation.spaces);
-  };
-  console.log('inserting:', tac);
-  cmdoc.replaceRange(tac + after + (addedNewLine?'\n':''), c);
-  var lines = tac.split('\n');
-  var c_middle = { line: c.line + lines.length - 1, ch: c.ch + lines[lines.length-1].length };
-  var allLines = (tac + after).split('\n');
-  var c_end = {line: c.line + allLines.length - 1, ch: c.ch + allLines[allLines.length-1].length};
+  if (tacs instanceof Function) {
+    tacs = tacs(indentation);
+  }
+  if (typeof tacs == 'string' || tacs instanceof String) {
+    tacs = [indentation.spaces + tacs.replaceAll('\n', '\n' + indentation.spaces)];
+  }
+
+  var text = tacs.filter(t => typeof t == 'string' || t instanceof String).join('');
+  cmdoc.replaceRange(text + (addedNewLine?'\n':''), c);
+  console.log('inserted:', text);
+
+  var c_middle = null;
+  var pos = { line: c.line, ch: c.ch };
+  for (var i = 0; i < tacs.length; i++) {
+    if (typeof tacs[i] == 'string' || tacs[i] instanceof String) {
+      var lines = tacs[i].split('\n');
+      pos = {
+        line: pos.line + lines.length - 1,
+        ch:   (lines.length > 1 ? 0 : pos.ch) + lines[lines.length-1].length
+      }
+    } else {
+      if (tacs[i] instanceof $) {
+        tacs[i].data('bookmark', cmdoc.setBookmark(pos, {widget:tacs[i][0]}));
+      } else if (tacs[i] === CURSOR) {
+        c_middle = pos;
+      }
+    }
+  }
+  if (c_middle === null) { c_middle = pos; }
+  c_end = pos;
+
+  //var lines = tac.split('\n');
+  //var c_middle = { line: c.line + lines.length - 1, ch: c.ch + lines[lines.length-1].length };
+  //var allLines = (tac + after).split('\n');
+  //var c_end = {line: c.line + allLines.length - 1, ch: c.ch + allLines[allLines.length-1].length};
   cmdoc.setCursor(c_middle);
   coq.goCursor();
   // TODO: check that there aren't any shelved goals etc.
@@ -260,7 +283,7 @@ function insertTactic(tac, after, recursion) {
     insertTacticCallback = theInsertTacticCallback({
       doc: cmdoc,
       c_start: orig_c,
-      text: tac,
+      text: text,
       c_middle: c_middle,
       c_end: c_end,
       addedNewLine: addedNewLine
@@ -324,7 +347,7 @@ function theInsertTacticCallback(inserted) {
     }
     if ($("#goal-text").find(".no-goals").length == 1) {
       if ($("#goal-text").find(".no-goals").text() == 'No more goals.') {
-        insertTactic((_ => ['Qed.', '']), '', true);
+        insertTactic((_ => 'Qed.'), true);
       } else if ($("#goal-text").find(".no-goals + .aside").length == 1) {
         var bullet = $("#goal-text").find(".no-goals + .aside").text().match(/Focus next goal with bullet (.*)\./)[1]
         console.log('next bullet:', bullet);
@@ -350,7 +373,7 @@ function theInsertTacticCallback(inserted) {
               break;
             }
           }
-          insertTactic((_ => [indentation + bullet + ' ' + originator, '']), '', true);
+          insertTactic((_ => [indentation + bullet + ' ' + originator]), true);
         }
       }
       return true; // stop tracking this execution.
@@ -466,11 +489,25 @@ function my_init_hover_actions() {
           '  ]' +
           ').');
         constructors = constructors.map(c => c.join(' '));
-        constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substr(1, c.length-2) : c);
+        constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substr(1, c.length-2).trim() : c);
         insertTactic(indent => {
           var bulletType = nextBulletType(indent.bullet);
-          var bullets = constructors.map(c => '\n' + indent.spaces + bulletType + ' when ' + c + ' as H' + target_text.trim() + '.');
-          return [indent.spaces + 'case_eq ' + target_text + '.' + bullets[0], bullets.slice(1).join('')]
+          var bullets = constructors.map(c => [
+            '\n' + indent.spaces + bulletType + ' when ' + c.trim() + ' as H' + target_text.trim() + '.',
+            $('<span class="in-code-button"/>')
+              .text('do later')
+              .one('click', ev => {
+                console.log('BUTTON CLICKED', ev);
+                $(ev.target).data('bookmark').clear();
+                insertTactic('subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.');
+              })
+          ]);
+          return [].concat(
+            indent.spaces + 'case_eq ' + target_text + '.',
+            bullets[0],
+            CURSOR,
+            bullets.slice(1).flat()
+          );
         });
       }
     });
