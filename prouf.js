@@ -561,7 +561,7 @@ var prouf = (function(waitJsCoqLoaded) {
 
     var close = $('<span/>');
     close
-      .addClass('floating-toolbar-button')
+      .addClass('floating-toolbar-button prouf-button-close')
       .text('×')
       .on('click', function(ev) {
         ev.stopPropagation();
@@ -574,10 +574,10 @@ var prouf = (function(waitJsCoqLoaded) {
     bar.appendTo(target.parent());
     bar.show();
 
-    bar.addButton = function(text, f) {
+    bar.addButton = function(name, text, f) {
       var button = $('<span/>');
       button
-        .addClass('floating-toolbar-button')
+        .addClass('floating-toolbar-button prouf-button-'+name)
         .text(text)
         .on('click', function(ev) {
           ev.stopPropagation();
@@ -600,10 +600,10 @@ var prouf = (function(waitJsCoqLoaded) {
       var target_text = target.text();
 
       var bar = _.floating_toolbar(target);
-      bar.addButton('unfold', function() {
+      bar.addButton('unfold', 'unfold', function() {
         _.insertTactic('unfold ' + target_text + '.');
       });
-      bar.addButton('case_eq', async function() {
+      bar.addButton('case_eq', 'case_eq', async function() {
         var constructors = [];
         var res = await _.queryVernac1('Check ' + target_text + ' .');
         if (res[1] == ':' && res.length == 3) {
@@ -658,17 +658,17 @@ var prouf = (function(waitJsCoqLoaded) {
       console.log('target:', target_text);
       if (target_text == '=') {
         var bar = _.floating_toolbar(target);
-        bar.addButton('reflexivity', function() { _.insertTactic('reflexivity.'); });
+        bar.addButton('reflexivity', 'reflexivity', function() { _.insertTactic('reflexivity.'); });
       } else if (target_text == '→') {
         var bar = _.floating_toolbar(target);
-        bar.addButton('intro', function() {
+        bar.addButton('intro', 'intro', function() {
           _.queryVernac1('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
             _.insertTactic('intro ' + id + '.');
           })
         });
       } else if (target_text == '∀') {
         var bar = _.floating_toolbar(target);
-        bar.addButton('intro', function() {
+        bar.addButton('intro', 'intro', function() {
           _.queryVernac1('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
             _.insertTactic('intro ' + id + '.');
           })
@@ -706,7 +706,7 @@ var prouf = (function(waitJsCoqLoaded) {
     
     target = $(target).first();
     if (target.length > 0) {
-      target.filter('.in-code-button').addClass('click-me');
+      target.filter('.in-code-button, .floating-toolbar-button').addClass('click-me');
 
       var circ = $('<div/>')
         .addClass('circle-around')
@@ -753,20 +753,28 @@ var prouf = (function(waitJsCoqLoaded) {
       target: (g, _intro) =>
         g.andFind('.constr\\.notation')
          .first((_i, e) => ['∀', '→'].includes($(e).text().trim())),
+      button: 'intro',
       scrollParent: 'body' },
     { re: /^case_eq?\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
       target: (g, case_eq) =>
         g.andFind('.constr\\.variable')
          .first((_i, e) => $(e).text().trim() == case_eq[1]),
+      button: 'case_eq',
       scrollParent: 'body' },
     { re: /^reflexivity\s*\.$/,
       target: (g, _reflexivity) =>
         g.andFind('.constr\\.notation')
          .first((_i, e) => $(e).text().trim() == '='),
+      button: 'reflexivity',
       scrollParent: 'body' },
     { re: /^subproof?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
       target: (_g, _subproof) =>
-        $('.do-later').first((_i, btn) => prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.doc.sentences.last().end) >= 0),
+        $('.do-later').first((_i, btn) =>
+          // button is after the last executed sentence
+             prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.doc.sentences.last().end) >= 0
+          // and button is before the next sentence
+          && prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.provider.getNext(coq.doc.sentences.last()).start) <= 0),
+      button: false, // TODO: factor out the code above instead
       scrollParent: 'main' },
     ];
 
@@ -778,7 +786,10 @@ var prouf = (function(waitJsCoqLoaded) {
         var m = txt.match(ltac.re);
         if (m) {
           var goal = $("#goal-text .coq-env hr + *");
-          var target = ltac.target(goal, m);
+          var target = ltac.button ? $('.prouf-button-' + ltac.button).first() : $();
+          if (target.length == 0) {
+            target = ltac.target(goal, m);
+          }
 
           // TODO: return a "clickme" action
           if (target) {
