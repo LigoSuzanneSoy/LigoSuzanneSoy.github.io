@@ -241,6 +241,11 @@ html #panel-wrapper > .flex-container {
   margin: 0;
 }
 
+main {
+  /* Needed because this element is scrolled, and we need to position some children in absolute */
+  position: relative;
+}
+
 .circle-around-hidden {
   filter: blur(20px) opacity(0);
 }
@@ -252,9 +257,9 @@ html #panel-wrapper > .flex-container {
 }
 
 @property --circle-around-spread {
-  syntax: '<percentage>';
+  syntax: '<length>';
   inherits: false;
-  initial-value: 7%;
+  initial-value: 0.7ex;
 }
 
 @property --circle-around-color {
@@ -295,6 +300,8 @@ html #panel-wrapper > .flex-container {
 	         size-circle-animation-end calc(var(--circle-around-duration) * var(--circle-around-end)) cubic-bezier(1, 0, 0, 1) calc(var(--circle-around-duration) * var(--circle-around-full-loops)) 1 forwards;
   transition: filter 1s linear;
   background: radial-gradient(ellipse at center, transparent calc(var(--circle-around-size) - var(--circle-around-spread)),var(--circle-around-color) var(--circle-around-size),transparent calc(var(--circle-around-size) + var(--circle-around-spread)));
+  pointer-events: none;
+  view-timeline-name: --foobar;
 }
 
 /*@keyframes opacity-circle-animation {
@@ -350,13 +357,13 @@ html #panel-wrapper > .flex-container {
   0% {
     animation-timing-function: ease-in-out;
     --circle-around-size: 20%;
-    --circle-around-spread: 5%;
+    --circle-around-spread: 0.5ex;
     /*outline: forestgreen solid 0.3ex;*/
     /*outline-offset: 0ex;*/
   }
   100% {
     --circle-around-size: 60%;
-    --circle-around-spread: 10%;
+    --circle-around-spread: 1ex;
     /*outline: yellowgreen solid 1ex;*/
     /*outline-offset: 4ex;*/
   }
@@ -366,10 +373,58 @@ html #panel-wrapper > .flex-container {
   0% {
     animation-timing-function: ease-in-out;
     --circle-around-size: 20%;
-    --circle-around-spread: 5%;
+    --circle-around-spread: 0.5ex;
   }
   100% {
     --circle-around-size: calc(20% + (40% * var(--circle-around-end)));
-    --circle-around-spread: calc(5% + (5% * var(--circle-around-end)));
+    --circle-around-spread: calc(0.5ex + (0.5ex * var(--circle-around-end)));
+  }
+}
+
+.circle-around::before {
+  content:'';
+  position: fixed;
+  top: -5ex;
+  left: 0;
+  width: calc( max( 100% - 38em, 55% ) );
+  height: 10ex;
+  background: radial-gradient(ellipse at center, green, transparent 50%);
+  animation: circle-around-near-top 5s linear both;
+  animation-timeline: --foobar;
+}
+
+.circle-around::after {
+  content:'';
+  position: fixed;
+  bottom: -5ex;
+  left: 0;
+  width: calc( max( 100% - 38em, 55% ) );
+  height: 10ex;
+  background: radial-gradient(ellipse at center, green, transparent 50%);
+  animation: circle-around-near-bottom 5s linear both;
+  animation-timeline: --foobar;
+}
+
+@keyframes circle-around-near-bottom {
+  0% {
+    bottom: -5ex;
+  }
+  20% {
+    bottom: -10ex;
+  }
+  100% {
+    bottom: -10ex;
+  }
+}
+
+@keyframes circle-around-near-top {
+  0% {
+    top: -10ex;
+  }
+  80% {
+    top: -10ex;
+  }
+  100% {
+    top: -5ex;
   }
 }

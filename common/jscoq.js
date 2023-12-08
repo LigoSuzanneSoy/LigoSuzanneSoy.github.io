@@ -31,18 +31,20 @@ var jscoq_opts = {
 
 var onJsCoqLoaded = [];
 var jsCoqInstance = null;
+var jQueryInstance = null;
 function waitJsCoqLoaded(f) {
   if (jsCoqInstance) {
-    f(jsCoqInstance);
+    f(jsCoqInstance, jQueryInstance);
   } else {
     onJsCoqLoaded[onJsCoqLoaded.length] = f;
   }
 }
-function jsCoqLoaded(coq) {
+function jsCoqLoaded(coq, jQuery) {
   //console.log('isJsCoqLoaded = true');
   jsCoqInstance = coq;
+  jQueryInstance = jQuery;
   for (var i = 0; i < onJsCoqLoaded.length; i++) {
-    onJsCoqLoaded[i](jsCoqInstance);
+    onJsCoqLoaded[i](jsCoqInstance, jQueryInstance);
   }
   onJsCoqLoaded=null;
 }
@@ -82,7 +84,7 @@ async function jsCoqLoad() {
     $('#panel-wrapper #toolbar').prepend($('<button>').addClass('close').text('×')
         .on('click', () => coq.layout.hide()));
     
-    jsCoqLoaded(coq);
+    jsCoqLoaded(coq, $);
 }
 
 function jsCoqStart() {

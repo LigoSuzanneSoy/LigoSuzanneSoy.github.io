@@ -1,17 +1,74 @@
 // my.js
 
-var prouf = (function($, waitJsCoqLoaded) {
+// TODO:
+// "Run" button under each code block
+// Better hidden boilerplate
+// sub-proofs in separate blocks (mostly done)
+
+// getNextSentence = function() {}
+// readSentence = function(act) {}
+// guideAction = function(act) {}
+
+// coq.doc.sentences.last().sp.editor.getLineTokens(9)
+
+var prouf = (function(waitJsCoqLoaded) {
   // We'll write all functions and variables global to this package in here.
-  var _ = {};
+  var _ = { };
+  var prouf = _;
+  var $ = null; // jQuery instance, set by _.init();
   var coq = null; // coq instance, set by _.init();
+
+  _.extendJQuery = function($) {
+    $.extend($.fn, {
+      q: function(op) {
+        var args = Array.prototype.slice.call(arguments, 1);
+        console.log(args);
+        this.queue(function(next) {
+          ((typeof op == 'string' || op instanceof String) ? $.fn[op] : op).apply($(this), args);
+          next();
+        });
+        return this;
+      },
+
+      andFind: function(selector) { return this.filter(selector).add(this.find(selector)) },
+
+      // TODO: more performant version that stops the filter at the first result
+      first: function(selector) { return (selector ? this.filter(selector) : this).eq(0); },
+      
+      // TODO: write unit tests for this one, it's more complex than I'd like and has many corner cases.
+      _isBeforeOrAfter: function(them, factor) {
+        return this.filter((_i,me) => {
+          var $me = $(me);
+          // .add(parents) puts the list of ancestors back in order from html to the bottom-most element
+          var myAncestorsIndexes = $.map($me.add($me.parents()), p => $(p).index());
+          var $them = $(them);
+          return $them.toArray().every(one => {
+            var $one = $(one);
+            // .add(parents) puts the list of ancestors back in order from html to the bottom-most element
+            var $onesAncestors = $one.add($one.parents());
+            for (var m = 0; m < Math.min(myAncestorsIndexes.length, $onesAncestors.length); m++) {
+              var myAncestorsIndex = myAncestorsIndexes[m];
+              var onesAncestorsIndex = $onesAncestors.eq(m).index();
+              if (myAncestorsIndex * factor < onesAncestorsIndex * factor) {
+                return true;
+              } else if (myAncestorsIndex * factor > onesAncestorsIndex * factor) {
+                return false;
+              } else {
+                // equal, continue with next child on my and one's side.
+              }
+            }
+            return true;
+          });
+        });
+      },
+      isBefore: function(them) { return this._isBeforeOrAfter(them, 1); },
+      isAfter: function(them) { return this._isBeforeOrAfter(them, -1); },
+    });
+
+    return $;
+  }
   
   _.globalLastGoalInfo = null;
-
-  // TODO:
-  // multiple options when point-and-clicking
-  // "Run" button under each code block
-  // Better hidden boilerplate
-  // sub-proofs in separate blocks
 
   _.stringToUint8Array = function(str) {
     var s = String(str);
@@ -279,7 +336,7 @@ var prouf = (function($, waitJsCoqLoaded) {
         }
       } else {
         if (tacs[i] instanceof $) {
-          todo[todo.length] = ((i, pos) => () => tacs[i].data('bookmark', cmdoc.setBookmark(pos, {widget:tacs[i][0]})))(i, pos);
+          todo[todo.length] = ((i, pos) => () => tacs[i].data('prouf-bookmark', cmdoc.setBookmark(pos, {widget:tacs[i][0]})))(i, pos);
         } else if (tacs[i] === _.CURSOR) {
           c_middle = pos;
         }
@@ -325,8 +382,9 @@ var prouf = (function($, waitJsCoqLoaded) {
     var msgwidget = inserted.doc.getEditor().addLineWidget(inserted.c_end.line, msg[0], {coverGutter: false, noHScroll: false});
     var bookmark = null;
     var rm = $('<span class="in-code-button in-code-button-remove">× remove</span>');
-    rm.on('click', function() {
+    rm.on('click', function(ev) {
       msgwidget.clear();
+      // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
       bookmark.clear();
       var c_rm_end = {line:c_end.line, ch:c_end.ch+3};
       // check that we're removing what we think we're removing!
@@ -349,6 +407,7 @@ var prouf = (function($, waitJsCoqLoaded) {
     });
     //inserted.doc.getEditor().addWidget({line:c_end.line, ch:c_end.ch+3}, rm[0], true);
     bookmark = inserted.doc.setBookmark({line:c_end.line, ch:c_end.ch+3}, {widget:rm[0]})
+    rm.data('prouf-bookmark', bookmark);
 
     inserted.doc.setCursor(c_end);
     coq.goCursor();
@@ -555,11 +614,12 @@ var prouf = (function($, waitJsCoqLoaded) {
             var bulletType = _.nextBulletType(indent.bullet);
             var bullets = constructors.map(c => [
               '\n' + indent.spaces + bulletType + ' when ' + c.trim() + ' as H' + target_text.trim() + '.',
-              $('<span class="in-code-button"/>')
+              $('<span class="in-code-button do-later"/>')
                 .text('do later')
                 .one('click', ev => {
                   console.log('BUTTON CLICKED', ev);
-                  $(ev.target).data('bookmark').clear();
+                  // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
+                  $(ev.target).data('prouf-bookmark').clear();
                   _.insertTactic('subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.');
                 })
             ]);
@@ -600,7 +660,7 @@ var prouf = (function($, waitJsCoqLoaded) {
 
   _.init = function() {
     // Wait for jsCoq to be loaded and save the instance
-    waitJsCoqLoaded(function(jsCoqInstance) { coq = jsCoqInstance; _.my_init()});
+    waitJsCoqLoaded(function(jsCoqInstance, jQuery) { coq = jsCoqInstance; $ = _.extendJQuery(jQuery); _.my_init()});
     _.waitJsCoqReady(_.my_init2);
     _.waitJsCoqReady(_.my_init_hover_actions);
     _.waitJsCoqReady(function() {
@@ -620,43 +680,97 @@ var prouf = (function($, waitJsCoqLoaded) {
     });
   };
 
-  $.fn.q = function(op) {
-    var args = Array.prototype.slice.call(arguments, 1);
-    console.log(args);
-    this.queue(function(next) {
-      ((typeof op == 'string' || op instanceof String) ? $.fn[op] : op).apply($(this), args);
-      next();
-    });
-    return this;
-  };
-
-  $.fn.andFind = function(selector) { return this.filter(selector).add(this.find(selector)) };
-
-  _.showCirc = function() {
-    var circ=$('<div/>')
+  _.currentCirc = null;
+  _.showCirc = function(target, scrollParent) {
+    var minRadius = Math.min(30, Math.max(7, Math.sqrt(Math.pow(target.width(), 2) + Math.pow(target.height(), 2))/2));
+    var ratio = 10;
+    
+    var circ = $('<div/>')
       .addClass('circle-around')
-      .hide()
-      .appendTo('body');
-
-    var target = $("#goal-text .coq-env hr + *").andFind('.constr\\.notation:contains("∀")').first();
-    var minRadius = Math.sqrt(Math.exp(target.width(), 2), Math.exp(target.height(), 2))/2;
-
-    var ratio = 2.5;
-    circ
       .width(minRadius * ratio)
       .height(minRadius * ratio)
-      .position({ my: 'center', at: 'center', of: target })
-      .show();
+      .appendTo(scrollParent)
+      .position({ my: 'center', at: 'center', of: target });
+
+    target.on('click', function(ev) { console.log('CLICKY', ev, this, arguments); _.removeCirc.call(circ); });
+
+    if (_.currentCirc !== null) {
+      _.removeCirc.call(_.currentCirc);
+    }
+    _.currentCirc = circ;
+
     return circ;
   };
 
-  _.hideCirc = function() {
+  _.removeCirc = function() {
     this.addClass('circle-around-hidden').delay(1000).q($.fn.remove);
+    _.currentCirc = null;
   }
   // _.showCirc().delay(1500).q(function() { console.log(this, arguments); }, 'foo', 'bar')
-  // _.showCirc().delay(1500).q(_.hideCirc)
+  // _.showCirc().delay(1500).q(_.removeCirc)
 
+  _.getNextSentence = function() {
+    var current = coq.doc.sentences.last();
+    var next = coq.provider.getNext(current, /*until*/);
+    if (next === null) {
+      return { type: 'end', sentence: null };
+    } else {
+      return { type: 'coq', sentence: next };
+    }
+  }
+
+  prouf.compareInt = (a, b) => (a == b) ? 0 : (a < b ? -1 : 1)
+  prouf.comparePos = (a, b) => (a.line == b.line) ? (prouf.compareInt(a.ch, b.ch)) : (prouf.compareInt(a.line, b.line))
+
+  prouf.ltacToAction = [
+    { re: /intros?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\./,
+      target: (g, _intro) =>
+        g.andFind('.constr\\.notation')
+         .first((_i, e) => ['∀', '→'].includes($(e).text().trim())),
+      scrollParent: 'body' },
+    { re: /case_eq?\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\./,
+      target: (g, case_eq) =>
+        g.andFind('.constr\\.variable')
+         .first((_i, e) => $(e).text().trim() == case_eq[1]),
+      scrollParent: 'body' },
+    { re: /reflexivity\s*\./,
+      target: (g, _reflexivity) =>
+        g.andFind('.constr\\.notation')
+         .first((_i, e) => $(e).text().trim() == '='),
+      scrollParent: 'body' },
+    { re: /subproof?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\./,
+      target: (_g, _subproof) =>
+        $('.do-later').first((_i, btn) => prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.doc.sentences.last().end) >= 0),
+      scrollParent: 'main' },
+    ];
+
+  prouf.sentenceToActions = function(s) {
+    if (s.type == 'coq') {
+      var txt = s.sentence.text.trim();
+
+      for (var ltac of prouf.ltacToAction) {
+        var m = txt.match(ltac.re);
+        if (m) {
+          var goal = $("#goal-text .coq-env hr + *");
+          var target = ltac.target(goal, m);
+
+          // TODO: return a "clickme" action
+          if (target) {
+            var c = prouf.showCirc(target, ltac.scrollParent);
+          }
+
+          break;
+        }
+      }
+    }
+  };
+
+  _.test = function() {
+    prouf.sentenceToActions(prouf.getNextSentence());
+    //_.removeCirc(c)
+  };
+  
   return _;
-})(jQuery, waitJsCoqLoaded);
+})(waitJsCoqLoaded);
 
-prouf.init()
+prouf.init();
