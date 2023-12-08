@@ -706,6 +706,8 @@ var prouf = (function(waitJsCoqLoaded) {
     
     target = $(target).first();
     if (target.length > 0) {
+      target.filter('.in-code-button').addClass('click-me');
+
       var circ = $('<div/>')
         .addClass('circle-around')
         .width(minRadius * ratio)
@@ -747,22 +749,22 @@ var prouf = (function(waitJsCoqLoaded) {
   prouf.comparePos = (a, b) => (a.line == b.line) ? (prouf.compareInt(a.ch, b.ch)) : (prouf.compareInt(a.line, b.line))
 
   prouf.ltacToAction = [
-    { re: /intros?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\./,
+    { re: /^intros?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
       target: (g, _intro) =>
         g.andFind('.constr\\.notation')
          .first((_i, e) => ['∀', '→'].includes($(e).text().trim())),
       scrollParent: 'body' },
-    { re: /case_eq?\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\./,
+    { re: /^case_eq?\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
       target: (g, case_eq) =>
         g.andFind('.constr\\.variable')
          .first((_i, e) => $(e).text().trim() == case_eq[1]),
       scrollParent: 'body' },
-    { re: /reflexivity\s*\./,
+    { re: /^reflexivity\s*\.$/,
       target: (g, _reflexivity) =>
         g.andFind('.constr\\.notation')
          .first((_i, e) => $(e).text().trim() == '='),
       scrollParent: 'body' },
-    { re: /subproof?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\./,
+    { re: /^subproof?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
       target: (_g, _subproof) =>
         $('.do-later').first((_i, btn) => prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.doc.sentences.last().end) >= 0),
       scrollParent: 'main' },

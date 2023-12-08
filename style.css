@@ -221,6 +221,11 @@ html #panel-wrapper > .flex-container {
   cursor: pointer;
 }
 
+.in-code-button.click-me {
+  border: thin solid green;
+  background: #c0ffcb;
+}
+
 .in-code-button.in-code-button-remove {
   border-color: red;
   background-color: pink;
@@ -403,6 +408,14 @@ main {
   background: radial-gradient(ellipse at center, green, transparent 50%);
   animation: circle-around-near-bottom 5s linear both;
   animation-timeline: --foobar;
+}
+
+.circle-around.circle-around-hidden::before {
+  display: none;
+}
+
+.circle-around.circle-around-hidden::after {
+  display: none;
 }
 
 @keyframes circle-around-near-bottom {
