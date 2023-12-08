@@ -175,6 +175,20 @@ html .waiting #jscoq-plug {
   background: rgb(192, 214, 222);
 }
 
+.floating-toolbar-button:focus, .floating-toolbar-button:active, .floating-toolbar-button:hover,
+.in-code-button:focus, .in-code-button:active, .in-code-button:hover {
+  text-decoration: underline;
+}
+
+.floating-toolbar-button, .in-code-button {
+  /* reset browser button style */
+  border: none;
+  background: transparent;
+  font-family: monospace;
+  font-size: 11pt;
+  /* end reset */
+}
+
 .floating-toolbar-button {
   display: inline-block;
   padding: 0.5ex 1ex;
@@ -250,7 +264,7 @@ html #panel-wrapper > .flex-container {
   margin: 0;
 }
 
-main > article:first-child() {
+main > article:first-child {
   /* Needed because this element is scrolled, and we need to position some children in absolute */
   position: relative;
 }

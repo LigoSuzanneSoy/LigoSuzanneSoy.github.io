@@ -5,9 +5,14 @@
 // Better hidden boilerplate
 // sub-proofs in separate blocks (mostly done)
 
-// getNextSentence = function() {}
-// readSentence = function(act) {}
-// guideAction = function(act) {}
+// Scroll:
+// * compute on the flight height of element using planned duration of audio/animation.
+// * reading time live update + progress bar
+// * scroll animations with https://scrollmagic.io/ jQuery plug-in (find a way to shorten animations when user is scrolling far)
+
+// getNextAction = function() {}
+// doAction() {}
+// readAction() {} # voice synthesis / my own voice
 
 // coq.doc.sentences.last().sp.editor.getLineTokens(9)
 
@@ -197,10 +202,10 @@ var prouf = (function(waitJsCoqLoaded) {
       // ==================================================================!!!!!!!!!!!!!!!!!
       // ==================================================================!!!!!!!!!!!!!!!!!
       // ==================================================================!!!!!!!!!!!!!!!!!
-      if (typeof window.proufTimeoutStarted == 'undefined') {
+      /*if (typeof window.proufTimeoutStarted == 'undefined') {
         window.proufTimeoutStarted = true;
         window.setTimeout(function() { window.setInterval(prouf.test, 2000); }, 500);
-      }
+      }*/
       // ==================================================================!!!!!!!!!!!!!!!!!
       // ==================================================================!!!!!!!!!!!!!!!!!
       // ==================================================================!!!!!!!!!!!!!!!!!
@@ -401,7 +406,7 @@ var prouf = (function(waitJsCoqLoaded) {
     msg.append(errelt.clone());
     var msgwidget = inserted.doc.getEditor().addLineWidget(inserted.c_end.line, msg[0], {coverGutter: false, noHScroll: false});
     var bookmark = null;
-    var rm = $('<span class="in-code-button in-code-button-remove">× remove</span>');
+    var rm = $('<button class="in-code-button in-code-button-remove">× remove</button>');
     rm.on('click', function(ev) {
       msgwidget.clear();
       // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
@@ -576,7 +581,7 @@ var prouf = (function(waitJsCoqLoaded) {
     bar.show();
 
     bar.addButton = function(name, text, f) {
-      var button = $('<span/>');
+      var button = $('<button/>');
       button
         .addClass('floating-toolbar-button prouf-button-'+name)
         .text(text)
@@ -634,7 +639,7 @@ var prouf = (function(waitJsCoqLoaded) {
             var bulletType = _.nextBulletType(indent.bullet);
             var bullets = constructors.map(c => [
               '\n' + indent.spaces + bulletType + ' when ' + c.trim() + ' as H' + target_text.trim() + '.',
-              $('<span class="in-code-button do-later"/>')
+              $('<button class="in-code-button do-later"/>')
                 .text('do later')
                 .one('click', ev => {
                   console.log('BUTTON CLICKED', ev);
@@ -700,7 +705,7 @@ var prouf = (function(waitJsCoqLoaded) {
     });
   };
 
-  _.currentCirc = null;
+  _.currentCircs = null;
   _.showCirc = function(target, scrollParent) {
     var minRadius = Math.min(30, Math.max(7, Math.sqrt(Math.pow(target.width(), 2) + Math.pow(target.height(), 2))/2));
     var ratio = 10;
@@ -716,22 +721,24 @@ var prouf = (function(waitJsCoqLoaded) {
         .appendTo(scrollParent)
         .position({ my: 'center', at: 'center', of: target });
 
-      target.on('click', function(ev) { console.log('CLICKY', ev, this, arguments); _.removeCirc.call(circ); });
+      target.on('click', function(_ev) { _.removeCircs(); });
+      target.on('remove', function(_ev) { _.removeCircs(); });
+      if (target.attr('tabindex') == '-1' || ! target.attr('tabindex')) { target.attr('tabindex', 0); } // make focussable
+      target.focus();
 
-      if (_.currentCirc !== null) {
-        console.log('circ_', 'remove', _.currentCirc);
-        _.removeCirc.call(_.currentCirc);
-      }
-      _.currentCirc = circ;
-      console.log('circ_', 'set', _.currentCirc);
+      _.removeCircs();
+      _.currentCircs = (_.currentCircs || $()).add(circ);
+      console.log('circ_', 'add', _.currentCircs);
 
       return circ;
     }
   };
 
-  _.removeCirc = function() {
-    _.currentCirc = null;
-    this.addClass('circle-around-hidden').delay(1000).q('remove');
+  _.removeCircs = function() {
+    _.currentCircs = _.currentCircs || $();
+    console.log('circ_', 'remove', _.currentCircs);
+    _.currentCircs.addClass('circle-around-hidden').delay(1000).q('remove');
+    _.currentCircs = $();
   }
   // _.showCirc().delay(1500).q(function() { console.log(this, arguments); }, 'foo', 'bar')
   // _.showCirc().delay(1500).q(_.removeCirc)
@@ -749,55 +756,85 @@ var prouf = (function(waitJsCoqLoaded) {
   prouf.compareInt = (a, b) => (a == b) ? 0 : (a < b ? -1 : 1)
   prouf.comparePos = (a, b) => (a.line == b.line) ? (prouf.compareInt(a.ch, b.ch)) : (prouf.compareInt(a.line, b.line))
 
-  prouf.ltacToAction = [
+  prouf.ltacToActions = [
     { re: /^intros?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
-      target: (g, _intro) =>
-        g.andFind('.constr\\.notation')
-         .first((_i, e) => ['∀', '→'].includes($(e).text().trim())),
-      button: 'intro',
-      scrollParent: '#overlays' },
+      actions: _intro => [
+        { type: 'clickGoal',
+          target: g =>
+            g.andFind('.constr\\.notation')
+             .first((_i, e) => ['∀', '→'].includes($(e).text().trim())),
+          scrollParent: '#overlays' },
+        { type: 'button',
+          button: 'intro',
+          scrollParent: '#overlays' } ] },
     { re: /^case_eq?\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
-      target: (g, case_eq) =>
-        g.andFind('.constr\\.variable')
-         .first((_i, e) => $(e).text().trim() == case_eq[1]),
-      button: 'case_eq',
-      scrollParent: '#overlays' },
+      actions: case_eq => [
+        { type: 'clickGoal',
+          target: g =>
+            g.andFind('.constr\\.variable')
+             .first((_i, e) => $(e).text().trim() == case_eq[1]),
+          scrollParent: '#overlays' },
+        { type: 'button',
+          button: 'case_eq',
+          scrollParent: '#overlays' } ] },
     { re: /^reflexivity\s*\.$/,
-      target: (g, _reflexivity) =>
-        g.andFind('.constr\\.notation')
-         .first((_i, e) => $(e).text().trim() == '='),
-      button: 'reflexivity',
-      scrollParent: '#overlays' },
+      actions: _reflexivity => [
+        { type: 'clickGoal',
+          target: g =>
+            g.andFind('.constr\\.notation')
+             .first((_i, e) => $(e).text().trim() == '='),
+          scrollParent: '#overlays' },
+        { type: 'button',
+          button: 'reflexivity',
+          scrollParent: '#overlays' } ] },
     { re: /^subproof?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
-      target: (_g, _subproof) =>
-        $('.do-later').first((_i, btn) =>
-          // button is after the last executed sentence
-             prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.doc.sentences.last().end) >= 0
-          // and button is before the next sentence
-          && prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.provider.getNext(coq.doc.sentences.last()).start) <= 0),
-      button: false, // TODO: factor out the code above instead
-      scrollParent: 'main > article:first-child()' },
+      actions: _subproof => [
+        { type: 'clickGoal',
+          target: _g =>
+            $('.do-later').first((_i, btn) =>
+              // button is after the last executed sentence
+                 prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.doc.sentences.last().end) >= 0
+              // and button is before the next sentence
+              && prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.provider.getNext(coq.doc.sentences.last()).start) <= 0),
+          scrollParent: 'main > article:first-child' } ] },
     ];
 
-  prouf.sentenceToActions = function(s) {
+  prouf.doAction = function(action) {
+    return new Promise((resolve, reject) => {
+      if (action.type == 'clickGoal') {
+        var goal = $("#goal-text .coq-env hr + *");
+        target = action.target(goal);
+      } else if (action.type == 'button') {
+        var target = $('.prouf-button-' + action.button).first();
+      } else {
+        console.error('UNKNOWN ACTION', action);
+        resolve(false);
+      }
+
+      if (target.length > 0) {
+        var c = prouf.showCirc(target, action.scrollParent);
+        resolve(true);
+      }
+
+      resolve(false);
+    });
+  };
+  
+  prouf.sentenceToActions = async function(s) {
     if (s.type == 'coq') {
       var txt = s.sentence.text.trim();
 
-      for (var ltac of prouf.ltacToAction) {
+      for (var ltac of prouf.ltacToActions) {
         var m = txt.match(ltac.re);
         if (m) {
-          var goal = $("#goal-text .coq-env hr + *");
-          var target = ltac.button ? $('.prouf-button-' + ltac.button).first() : $();
-          if (target.length == 0) {
-            target = ltac.target(goal, m);
+          var actions = ltac.actions(m);
+          for (var i = actions.length -1; i >= 0; i--) {
+            var action = actions[i];
+            console.log('trying:', m, action)
+            if (await prouf.doAction(action)) {
+              break;
+            }
           }
-
-          // TODO: return a "clickme" action
-          if (target) {
-            var c = prouf.showCirc(target, ltac.scrollParent);
-          }
-
-          break;
         }
       }
     }
