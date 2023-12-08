@@ -101,23 +101,12 @@ var prouf = (function(waitJsCoqLoaded) {
     _.get_file(path, function(path, contents) { callback(path, _.uint8ArrayToString(contents)); });
   };
 
-  _.onJsCoqReady = [];
-  _.isJsCoqReady = false;
-  _.waitJsCoqReady = function(f) {
-    if (_.isJsCoqReady) {
-      f();
-    } else {
-      _.onJsCoqReady[_.onJsCoqReady.length] = f;
-    }
-  };
-  _.jsCoqReady = function() {
-    //console.log('_.isJsCoqReady = true');
-    _.isJsCoqReady = true;
-    for (var i = 0; i < _.onJsCoqReady.length; i++) {
-      _.onJsCoqReady[i]();
-    }
-    _.onJsCoqReady=null;
-  };
+  _.jsCoqReadyResolve = null;
+  _.jsCoqReadyReject = null;
+  _.waitJsCoqReady = new Promise((resolve, reject) => {
+    _.jsCoqReadyResolve = resolve;
+    _.jsCoqReadyReject = reject;
+  });
 
   _.displayProgress = function(isInProgress) {
     document.body.classList[isInProgress?'add':'remove']('jscoq-waiting')
@@ -133,7 +122,7 @@ var prouf = (function(waitJsCoqLoaded) {
         if (mode == 'ready') {
           document.body.classList.remove('waiting');
           _.displayProgress(false);
-          _.jsCoqReady();
+          _.jsCoqReadyResolve();
         }
         return f.call(that, version_info, msg, mode);
       }
@@ -688,25 +677,25 @@ var prouf = (function(waitJsCoqLoaded) {
     var {coq:jsCoqInstance, $:jQuery} = await waitJsCoqLoaded;
     coq = jsCoqInstance;
     $ = _.extendJQuery(jQuery);
-    _.my_init()
+    _.my_init();
 
-    _.waitJsCoqReady(_.my_init2);
-    _.waitJsCoqReady(_.my_init_hover_actions);
-    _.waitJsCoqReady(function() {
-      var line = parseInt(window.location.hash.substring(1)) || 93;
-      var cm = coq.provider.snippets.find(cm => {
-        var first = cm.editor.options.firstLineNumber;
-        return first <= line && first + cm.editor.lastLine() >= line;
-      });
-      cm.editor.scrollIntoView(line - cm.editor.options.firstLineNumber)
-      var l = line - cm.editor.options.firstLineNumber;
-      cm.editor.setCursor({ line: l, ch: cm.editor.getLine(l).length });
-      coq.provider.currentFocus = cm;
-      cm.editor.focus();
-      coq.goCursor();
+    await _.waitJsCoqReady;
+    _.my_init2()
+    _.my_init_hover_actions();
 
-      $(document.body).on('click', '.CodeMirror-linenumber', function(ev) { window.location.href = '#' + $(ev.target).text(); });
+    var line = parseInt(window.location.hash.substring(1)) || 93;
+    var cm = coq.provider.snippets.find(cm => {
+      var first = cm.editor.options.firstLineNumber;
+      return first <= line && first + cm.editor.lastLine() >= line;
     });
+    cm.editor.scrollIntoView(line - cm.editor.options.firstLineNumber)
+    var l = line - cm.editor.options.firstLineNumber;
+    cm.editor.setCursor({ line: l, ch: cm.editor.getLine(l).length });
+    coq.provider.currentFocus = cm;
+    cm.editor.focus();
+    coq.goCursor();
+
+    $(document.body).on('click', '.CodeMirror-linenumber', function(ev) { window.location.href = '#' + $(ev.target).text(); });
   };
 
   _.currentCircs = null;
