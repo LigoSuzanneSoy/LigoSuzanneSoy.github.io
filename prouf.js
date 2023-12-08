@@ -683,9 +683,13 @@ var prouf = (function(waitJsCoqLoaded) {
     });
   };
 
-  _.init = function() {
+  _.init = async function() {
     // Wait for jsCoq to be loaded and save the instance
-    waitJsCoqLoaded(function(jsCoqInstance, jQuery) { coq = jsCoqInstance; $ = _.extendJQuery(jQuery); _.my_init()});
+    var {coq:jsCoqInstance, $:jQuery} = await waitJsCoqLoaded;
+    coq = jsCoqInstance;
+    $ = _.extendJQuery(jQuery);
+    _.my_init()
+
     _.waitJsCoqReady(_.my_init2);
     _.waitJsCoqReady(_.my_init_hover_actions);
     _.waitJsCoqReady(function() {
@@ -849,4 +853,4 @@ var prouf = (function(waitJsCoqLoaded) {
   return _;
 })(waitJsCoqLoaded);
 
-prouf.init();
+/* await */ prouf.init();

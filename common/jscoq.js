@@ -29,25 +29,11 @@ var jscoq_opts = {
     file_dialog: true
 };
 
-var onJsCoqLoaded = [];
-var jsCoqInstance = null;
-var jQueryInstance = null;
-function waitJsCoqLoaded(f) {
-  if (jsCoqInstance) {
-    f(jsCoqInstance, jQueryInstance);
-  } else {
-    onJsCoqLoaded[onJsCoqLoaded.length] = f;
-  }
-}
-function jsCoqLoaded(coq, jQuery) {
-  //console.log('isJsCoqLoaded = true');
-  jsCoqInstance = coq;
-  jQueryInstance = jQuery;
-  for (var i = 0; i < onJsCoqLoaded.length; i++) {
-    onJsCoqLoaded[i](jsCoqInstance, jQueryInstance);
-  }
-  onJsCoqLoaded=null;
-}
+var jsCoqLoadedResolve, jsCoqLoadedReject;
+var waitJsCoqLoaded = new Promise((resolve, reject) => {
+    jsCoqLoadedResolve = resolve;
+    jsCoqLoadedReject = reject;
+});
 
 async function jsCoqLoad() {
     // - remove empty code fragments (coqdoc generates some spurious ones)
@@ -84,11 +70,11 @@ async function jsCoqLoad() {
     $('#panel-wrapper #toolbar').prepend($('<button>').addClass('close').text('×')
         .on('click', () => coq.layout.hide()));
     
-    jsCoqLoaded(coq, $);
+    jsCoqLoadedResolve({ coq : coq, $ : $ });
 }
 
 function jsCoqStart() {
-    waitJsCoqLoaded(function() { coq.layout.show(); });
+    waitJsCoqLoaded.then(function() { coq.layout.show(); });
 }
 
 function isTerse() {
