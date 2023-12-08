@@ -250,9 +250,19 @@ html #panel-wrapper > .flex-container {
   margin: 0;
 }
 
-main {
+main > article:first-child() {
   /* Needed because this element is scrolled, and we need to position some children in absolute */
   position: relative;
+}
+
+#overlays {
+  top: 0;
+  left: 0;
+  width: 100vw !important; /* override something in jsCoq's CSS */
+  height: 100vh;
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .circle-around-hidden {

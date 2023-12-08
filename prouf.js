@@ -120,6 +120,7 @@ var prouf = (function(waitJsCoqLoaded) {
 
   _.my_init = function() {
     (function() {
+      $('<div id="overlays"></div>').appendTo('body');
       var that = coq.layout;
       var f = that.splash;
       that.splash = function(version_info, msg, mode) {
@@ -754,19 +755,19 @@ var prouf = (function(waitJsCoqLoaded) {
         g.andFind('.constr\\.notation')
          .first((_i, e) => ['∀', '→'].includes($(e).text().trim())),
       button: 'intro',
-      scrollParent: 'body' },
+      scrollParent: '#overlays' },
     { re: /^case_eq?\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
       target: (g, case_eq) =>
         g.andFind('.constr\\.variable')
          .first((_i, e) => $(e).text().trim() == case_eq[1]),
       button: 'case_eq',
-      scrollParent: 'body' },
+      scrollParent: '#overlays' },
     { re: /^reflexivity\s*\.$/,
       target: (g, _reflexivity) =>
         g.andFind('.constr\\.notation')
          .first((_i, e) => $(e).text().trim() == '='),
       button: 'reflexivity',
-      scrollParent: 'body' },
+      scrollParent: '#overlays' },
     { re: /^subproof?\s+(\?|[_a-zA-Z][a-zA-Z0-9]*)\s*\.$/,
       target: (_g, _subproof) =>
         $('.do-later').first((_i, btn) =>
@@ -775,7 +776,7 @@ var prouf = (function(waitJsCoqLoaded) {
           // and button is before the next sentence
           && prouf.comparePos($(btn).data('prouf-bookmark').find(), coq.provider.getNext(coq.doc.sentences.last()).start) <= 0),
       button: false, // TODO: factor out the code above instead
-      scrollParent: 'main' },
+      scrollParent: 'main > article:first-child()' },
     ];
 
   prouf.sentenceToActions = function(s) {
