@@ -203,6 +203,13 @@ Inductive bar := A | B : nat -&gt; nat -&gt; bar | C.
 
 Goal forall y : bar, y = y.
 (* Run until here, with the GUI try to reproduce the proof below. *)
+idtac.
+intro y.
+case_eq y.
+- when A as Hy.
+- when B n n0 as Hy.
+- when C as Hy.
+(* ... *)
 
 intros y.
 case_eq y.

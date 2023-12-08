@@ -188,6 +188,25 @@ var prouf = (function(waitJsCoqLoaded) {
     }
     if (msg.data && msg.data[0] == 'GoalInfo' && msg.data[2] && msg.data[2].goals && msg.data[2].goals.length > 0) {
       coq.layout.show();
+      
+      
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      if (typeof window.proufTimeoutStarted == 'undefined') {
+        window.proufTimeoutStarted = true;
+        window.setTimeout(function() { window.setInterval(prouf.test, 2000); }, 500);
+      }
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+      // ==================================================================!!!!!!!!!!!!!!!!!
+
     }
   };
 
@@ -664,7 +683,7 @@ var prouf = (function(waitJsCoqLoaded) {
     _.waitJsCoqReady(_.my_init2);
     _.waitJsCoqReady(_.my_init_hover_actions);
     _.waitJsCoqReady(function() {
-      var line = parseInt(window.location.hash.substring(1)) || 91;
+      var line = parseInt(window.location.hash.substring(1)) || 93;
       var cm = coq.provider.snippets.find(cm => {
         var first = cm.editor.options.firstLineNumber;
         return first <= line && first + cm.editor.lastLine() >= line;
@@ -685,26 +704,31 @@ var prouf = (function(waitJsCoqLoaded) {
     var minRadius = Math.min(30, Math.max(7, Math.sqrt(Math.pow(target.width(), 2) + Math.pow(target.height(), 2))/2));
     var ratio = 10;
     
-    var circ = $('<div/>')
-      .addClass('circle-around')
-      .width(minRadius * ratio)
-      .height(minRadius * ratio)
-      .appendTo(scrollParent)
-      .position({ my: 'center', at: 'center', of: target });
+    target = $(target).first();
+    if (target.length > 0) {
+      var circ = $('<div/>')
+        .addClass('circle-around')
+        .width(minRadius * ratio)
+        .height(minRadius * ratio)
+        .appendTo(scrollParent)
+        .position({ my: 'center', at: 'center', of: target });
 
-    target.on('click', function(ev) { console.log('CLICKY', ev, this, arguments); _.removeCirc.call(circ); });
+      target.on('click', function(ev) { console.log('CLICKY', ev, this, arguments); _.removeCirc.call(circ); });
 
-    if (_.currentCirc !== null) {
-      _.removeCirc.call(_.currentCirc);
+      if (_.currentCirc !== null) {
+        console.log('circ_', 'remove', _.currentCirc);
+        _.removeCirc.call(_.currentCirc);
+      }
+      _.currentCirc = circ;
+      console.log('circ_', 'set', _.currentCirc);
+
+      return circ;
     }
-    _.currentCirc = circ;
-
-    return circ;
   };
 
   _.removeCirc = function() {
-    this.addClass('circle-around-hidden').delay(1000).q($.fn.remove);
     _.currentCirc = null;
+    this.addClass('circle-around-hidden').delay(1000).q('remove');
   }
   // _.showCirc().delay(1500).q(function() { console.log(this, arguments); }, 'foo', 'bar')
   // _.showCirc().delay(1500).q(_.removeCirc)
@@ -766,6 +790,7 @@ var prouf = (function(waitJsCoqLoaded) {
   };
 
   _.test = function() {
+    console.log('circ_', 'prouf.test');
     prouf.sentenceToActions(prouf.getNextSentence());
     //_.removeCirc(c)
   };
