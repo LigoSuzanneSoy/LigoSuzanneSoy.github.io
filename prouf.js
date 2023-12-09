@@ -14,6 +14,65 @@
 // doAction() {}
 // readAction() {} # voice synthesis / my own voice
 
+// vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+
+// TODO: In jscoq.js, this indirectly calls coq.work. This is where we can detect if we have finished working
+//
+// vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+// *****************************************************************************************************************************
+// Best solution would be to rewrite coq.work, to avoid the stack overflow and the O(n²), and have startWork + finishWork events
+// *****************************************************************************************************************************
+// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//
+// this.worker.addEventListener('message', 
+//     this._handler = evt => this.coq_handler(evt));
+
+// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+// coq.work or the functions it calls, e.g. coq.add,
+// should use a Deferred-style promise to allow making
+// a loop that calls work() until there is no more work left,
+// without making an infinite call stack.
+//
+// ESPECIALLY when coq.coq.coq_handler calls (indirectly) the work() again.
+//
+// Something like this works.
+// Behaviour can be made seamless (aside from loosing the stack)
+// with an async function, by immediately returning a Deferred-like promise,
+// adding a job to the queue opened by the topmost coq.work on the stack if there is one
+//        (otherwise start a queue processor like below),
+// and the queue processor resolves the promise from the outside when it performs the task.
+//
+// I could write a generic tailCall(f)(a) function that does the wrapping job at least for
+// functions which call themselves.
+// 
+//
+//       var worker = function(f, a) {
+//         var queue = [{code: f, arg: a}];
+//         var cont = true;
+//         var queueWork = function(ff, aa) {
+//             queue.push({code: ff, arg: aa})
+//         };
+//         while (cont) {
+//             var task = queue.shift();
+//             if (task) {
+//                 task.code(queueWork, task.arg);
+//             } else {
+//                 cont = false;
+//             }
+//         }
+//       };
+//
+//       var f = async(queueWork, i)=>{
+//         if (i == 100) {
+//             debugger; return 'finished'
+//         } else {
+//             queueWork(function(qw, j) { console.log(f(qw, j + 1)); }, i);
+//         }
+//       }
+//
+//       worker(f, 0)
+
 // coq.doc.sentences.last().sp.editor.getLineTokens(9)
 
 var prouf = (function(waitJsCoqLoaded) {
@@ -101,18 +160,23 @@ var prouf = (function(waitJsCoqLoaded) {
     _.get_file(path, function(path, contents) { callback(path, _.uint8ArrayToString(contents)); });
   };
 
-  _.jsCoqReadyResolve = null;
-  _.jsCoqReadyReject = null;
-  _.waitJsCoqReady = new Promise((resolve, reject) => {
-    _.jsCoqReadyResolve = resolve;
-    _.jsCoqReadyReject = reject;
-  });
+  _.Deferred = function() {
+    this.isResolved = false;
+    this.promise = new Promise((resolve, reject) => {
+      this.resolve = x => { this.isResolved = true; resolve(x); };
+      this.reject = reject;
+    });
+    this.then = function (f) { return this.promise.then(f); };
+  };
+
+  _.waitJsCoqReady = new _.Deferred();
 
   _.displayProgress = function(isInProgress) {
     document.body.classList[isInProgress?'add':'remove']('jscoq-waiting')
   };
 
   _.my_init = function() {
+    // TODO: refactor to use events + promises
     (function() {
       $('<div id="overlays"></div>').appendTo('body');
       var that = coq.layout;
@@ -122,7 +186,7 @@ var prouf = (function(waitJsCoqLoaded) {
         if (mode == 'ready') {
           document.body.classList.remove('waiting');
           _.displayProgress(false);
-          _.jsCoqReadyResolve();
+          _.waitJsCoqReady.resolve();
         }
         return f.call(that, version_info, msg, mode);
       }
@@ -308,7 +372,7 @@ var prouf = (function(waitJsCoqLoaded) {
   };
   // ##########################################################################################################################
 
-  _.CURSOR = {}; // cursor marker
+  _.CURSOR = { uniqueObject: "CURSOR" }; // cursor marker
 
   _.insertTactic = function(tacs, recursion) {
     var cmdoc = coq.provider.currentFocus.editor.getDoc();
@@ -672,11 +736,22 @@ var prouf = (function(waitJsCoqLoaded) {
     });
   };
 
+  // 'uninitialized', 'waitingjsCoqLoaded', 'waitingJsCoqReady'
+  // multiple status could in principle co-exist, this is mostly for display purposes.
+  _.currentTask = 'uninitialized';
+  _.startTask = function(currentTask) {
+    
+  }
+
+  _.initialized = new _.Deferred();
   _.init = async function() {
+    if (_.initialized.isResolved) { return; }
+
     // Wait for jsCoq to be loaded and save the instance
     var {coq:jsCoqInstance, $:jQuery} = await waitJsCoqLoaded;
     coq = jsCoqInstance;
     $ = _.extendJQuery(jQuery);
+    
     _.my_init();
 
     await _.waitJsCoqReady;
@@ -696,6 +771,8 @@ var prouf = (function(waitJsCoqLoaded) {
     coq.goCursor();
 
     $(document.body).on('click', '.CodeMirror-linenumber', function(ev) { window.location.href = '#' + $(ev.target).text(); });
+
+    _.initialized.resolve();
   };
 
   _.currentCircs = null;
@@ -739,7 +816,13 @@ var prouf = (function(waitJsCoqLoaded) {
   _.getNextSentence = function() {
     var current = coq.doc.sentences.last();
     var next = coq.provider.getNext(current, /*until*/);
-    if (next === null) {
+    // skip over comments /*and collapsed blocks of code*/
+    // TODO: if the document ends with a collapsed block, this will return false :thinking_face:
+    while (next && (next.flags.is_comment /*|| next.flags.is_hidden*/)) {
+      next = coq.provider.getNext(next, /*until*/);
+    }
+
+    if (next) {
       return { type: 'end', sentence: null };
     } else {
       return { type: 'coq', sentence: next };
