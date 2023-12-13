@@ -931,6 +931,7 @@ var prouf = (function(waitJsCoqLoaded) {
   };
   
   prouf.sentenceToActions = async function(s) {
+    // TODO: this shouldn't actually run the actions, it should only list them.
     if (s.type == 'coq') {
       var txt = s.sentence.text.trim();
 

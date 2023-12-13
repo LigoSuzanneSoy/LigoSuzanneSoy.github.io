@@ -319,6 +319,16 @@ main > article:first-child {
   initial-value: 2.5s;
 }
 
+html {
+  /* re-setting those needed for firefox? */
+  --circle-around-size: 36%;
+  --circle-around-spread: 0.7ex;
+  --circle-around-color: yellowgreen;
+  --circle-around-end: 0.4;
+  --circle-around-full-loops: 2;
+  --circle-around-duration: 2.5s;
+}
+
 .circle-around-hidden {
   filter: blur(20px) opacity(0);
 }
