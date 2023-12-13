@@ -131,75 +131,13 @@ var prouf = (function(waitJsCoqLoaded) {
 
     return $;
   };
-  
-  _.noStack = function(asyncf) {
-    var lastTime = Date.now();
-    var breathe = async () => {
-      // don't lock the UI thread if we've been busy for a while
-      var time = Date.now();
-      if (time - lastTime > 10) {
-        console.log('breathing');
-        lastTime = time;
-        var breatheOut = null;
-        var breatheIn = new Promise((resolve, reject) => breatheOut = resolve);
-        window.setTimeout(breatheOut, 0);
-        await breatheIn;
-      } else {
-        console.log('could have breathed here');
-      }
+
+  _.advice = function(obj, fld, fun) { 
+    obj['prouf_old_' + fld] = obj[fld];
+    obj[fld] = function() {
+      fun(this, arguments);
+      return obj['prouf_old_' + fld].call(this, arguments);
     };
-  
-    var doTask = async function (task) {
-      var ret = null;
-      var exn = false;
-  
-      await breathe();
-      try {
-        ret = await asyncf.apply(task.that, task.args);
-      } catch (e) {
-        exn = true;
-        ret = e;
-      }
-      await breathe();
-  
-      if (exn) {
-        // TODO: that's probably not exactly how real promises catch exceptions
-        task.reject(ret);
-      } else {
-        task.resolve(ret);
-      }
-    }
-  
-    var ret = async function() {
-      var task = { that: this, args: arguments, resolve: null, reject: null, ret: ret, counter: ret.counter, uid: ret.uid };
-      var promise = new Promise((resolve, reject) => { task.resolve = resolve; task.reject = reject; });
-      if (!ret.queue) {
-        ret.queueSignal = new Promise((resolve, _reject) => ret.sendQueueSignal = resolve);
-        ret.queue = [task];
-        ret.uid = Math.floor(Math.random()*100000);
-        ret.counter = 1;
-        while (true) {
-          while (ret.queue.length > 0) {
-            doTask(ret.queue.shift());
-          }
-          await Promise.any([ret.queueSignal, promise]); // wait for the outermost call to finish, or for a task to be added to the queue.
-          if (ret.queue.length == 0) {
-            // queue is empty, so the outermost call must've finished.
-            ret.queue = null;
-            ret.queueSignal = null;
-            ret.sendQueueSignal = null;
-            break;
-          }
-          ret.queueSignal = new Promise((resolve, _reject) => ret.sendQueueSignal = resolve);
-        }
-      } else {
-        ret.queue.push(task);
-        ret.counter++;
-        ret.sendQueueSignal();
-      }
-      return promise;
-    }
-    return ret;
   };
 
   _.globalLastGoalInfo = null;
@@ -317,7 +255,6 @@ var prouf = (function(waitJsCoqLoaded) {
     }
     if (msg.data && msg.data[0] == 'GoalInfo' && msg.data[2] && msg.data[2].goals && msg.data[2].goals.length > 0) {
       coq.layout.show();
-      
       
       // ==================================================================!!!!!!!!!!!!!!!!!
       // ==================================================================!!!!!!!!!!!!!!!!!
@@ -680,6 +617,8 @@ var prouf = (function(waitJsCoqLoaded) {
 
   _.queryVernac1 = async function(q) { var res = await _.queryVernac(q); return res[0]; };
 
+  _.button = function(name, text, f) { return { name:name, text:text, f:f }; }
+
   _.floating_toolbar = function(target) {
     var bar = $('<div/>');
     bar.addClass('floating-toolbar');
@@ -719,6 +658,12 @@ var prouf = (function(waitJsCoqLoaded) {
       this.position({ my: "center bottom", at: "center top+0.5ex", of: target, collision: "flipfit", within: $('#goal-text') });
     };
 
+    for (var i = 1; i < arguments.length; i++) {
+      bar.addButton(arguments[i].name, arguments[i].text, arguments[i].f);
+    }
+
+    _.recomputeCurrentAction();
+
     return bar;
   }
 
@@ -728,80 +673,80 @@ var prouf = (function(waitJsCoqLoaded) {
       var target = $(ev.target);
       var target_text = target.text();
 
-      var bar = _.floating_toolbar(target);
-      bar.addButton('unfold', 'unfold', function() {
-        _.insertTactic('unfold ' + target_text + '.');
-      });
-      bar.addButton('case_eq', 'case_eq', async function() {
-        var constructors = [];
-        var res = await _.queryVernac1('Check ' + target_text + ' .');
-        if (res[1] == ':' && res.length == 3) {
-          var type = res[2];
-          //var res2 = await _.queryVernac('Check ltac:(let x := fresh "inspect" in intro x; case_eq x; intros; exact I) : forall x : ' + type + ', True.');
-          var constructors = await _.queryVernac(
-            'try(' +
-            '  cut ((' + type + ') -> True); cycle 1;'+
-            '  [' +
-            '    let x := fresh "inspect" in intro x; case_eq x;' +
-            '    repeat(' +
-            '      match goal with' +
-            '      |- _ -> _ -> _ => intro' +
-            '      end' +
-            '    );' +
-            '    match goal with' +
-            '    |- ?inspect = ?T -> True => idtac T' +
-            '    end;' +
-            '    intro; exact I' +
-            '  |' +
-            '    fail' +
-            '  ]' +
-            ').');
-          constructors = constructors.map(c => c.join(' '));
-          constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substring(1, c.length-1).trim() : c);
-          _.insertTactic(indent => {
-            var bulletType = _.nextBulletType(indent.bullet);
-            var bullets = constructors.map(c => [
-              '\n' + indent.spaces + bulletType + ' when ' + c.trim() + ' as H' + target_text.trim() + '.',
-              $('<button class="in-code-button do-later"/>')
-                .text('do later')
-                .one('click', ev => {
-                  console.log('BUTTON CLICKED', ev);
-                  // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
-                  $(ev.target).data('prouf-bookmark').clear();
-                  _.insertTactic('subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.');
-                })
-            ]);
-            return [].concat(
-              indent.spaces + 'case_eq ' + target_text + '.',
-              bullets[0],
-              _.CURSOR,
-              bullets.slice(1).flat()
-            );
-          });
-        }
-      });
+      var bar = _.floating_toolbar(target,
+        _.button('unfold', 'unfold', function() {
+          _.insertTactic('unfold ' + target_text + '.');
+        }),
+        _.button('case_eq', 'case_eq', async function() {
+          var constructors = [];
+          var res = await _.queryVernac1('Check ' + target_text + ' .');
+          if (res[1] == ':' && res.length == 3) {
+            var type = res[2];
+            //var res2 = await _.queryVernac('Check ltac:(let x := fresh "inspect" in intro x; case_eq x; intros; exact I) : forall x : ' + type + ', True.');
+            var constructors = await _.queryVernac(
+              'try(' +
+              '  cut ((' + type + ') -> True); cycle 1;'+
+              '  [' +
+              '    let x := fresh "inspect" in intro x; case_eq x;' +
+              '    repeat(' +
+              '      match goal with' +
+              '      |- _ -> _ -> _ => intro' +
+              '      end' +
+              '    );' +
+              '    match goal with' +
+              '    |- ?inspect = ?T -> True => idtac T' +
+              '    end;' +
+              '    intro; exact I' +
+              '  |' +
+              '    fail' +
+              '  ]' +
+              ').');
+            constructors = constructors.map(c => c.join(' '));
+            constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substring(1, c.length-1).trim() : c);
+            _.insertTactic(indent => {
+              var bulletType = _.nextBulletType(indent.bullet);
+              var bullets = constructors.map(c => [
+                '\n' + indent.spaces + bulletType + ' when ' + c.trim() + ' as H' + target_text.trim() + '.',
+                $('<button class="in-code-button do-later"/>')
+                  .text('do later')
+                  .one('click', ev => {
+                    console.log('BUTTON CLICKED', ev);
+                    // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
+                    $(ev.target).data('prouf-bookmark').clear();
+                    _.insertTactic('subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.');
+                  })
+              ]);
+              return [].concat(
+                indent.spaces + 'case_eq ' + target_text + '.',
+                bullets[0],
+                _.CURSOR,
+                bullets.slice(1).flat()
+              );
+            });
+          }
+        }));
     });
     $("#goal-text").on('click', ".coq-env hr + .constr\\.notation, .coq-env hr + * .constr\\.notation", function (ev) {
       var target = $(ev.target)
       var target_text = target.text();
       console.log('target:', target_text);
       if (target_text == '=') {
-        var bar = _.floating_toolbar(target);
-        bar.addButton('reflexivity', 'reflexivity', function() { _.insertTactic('reflexivity.'); });
+        var bar = _.floating_toolbar(target,
+          _.button('reflexivity', 'reflexivity', function() { _.insertTactic('reflexivity.'); }));
       } else if (target_text == '→') {
-        var bar = _.floating_toolbar(target);
-        bar.addButton('intro', 'intro', function() {
-          _.queryVernac1('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
-            _.insertTactic('intro ' + id + '.');
-          })
-        });
+        var bar = _.floating_toolbar(target,
+          _.button('intro', 'intro', function() {
+            _.queryVernac1('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
+              _.insertTactic('intro ' + id + '.');
+            })
+          }));
       } else if (target_text == '∀') {
-        var bar = _.floating_toolbar(target);
-        bar.addButton('intro', 'intro', function() {
-          _.queryVernac1('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
-            _.insertTactic('intro ' + id + '.');
-          })
-        });
+        var bar = _.floating_toolbar(target,
+          _.button('intro', 'intro', function() {
+            _.queryVernac1('try (intro; match goal with X: _ |- _ => idtac X end; fail).').then(function(id) {
+              _.insertTactic('intro ' + id + '.');
+            })
+          }));
       }
     });
   };
@@ -821,8 +766,6 @@ var prouf = (function(waitJsCoqLoaded) {
     var {coq:jsCoqInstance, $:jQuery} = await waitJsCoqLoaded;
     coq = jsCoqInstance;
     $ = _.extendJQuery(jQuery);
-
-    coq.work = _.noStack(coq.work);
     
     _.my_init();
 
@@ -844,35 +787,54 @@ var prouf = (function(waitJsCoqLoaded) {
 
     $(document.body).on('click', '.CodeMirror-linenumber', function(ev) { window.location.href = '#' + $(ev.target).text(); });
 
+    // TODO: jsCoq handles multiple workers, this isn't reliable
+    coq.coq.worker.addEventListener('message', _msg => {
+      if (coq.doc.sentences.filter(s => s.phase != Phases.PROCESSED && s.phase != Phases.ERROR).length == 0) {
+        //console.log('============================', 'DONE FOR NOW');
+        _.recomputeCurrentAction();
+      }
+    });
+
+    _.advice(coq.layout, 'show', () => window.setTimeout(_.recomputeCurrentAction, 500));
+
     _.initialized.resolve();
   };
 
   _.currentCircs = null;
   _.showCirc = function(target, scrollParent) {
+    _.currentCircs = (_.currentCircs || $());
+
     var minRadius = Math.min(30, Math.max(7, Math.sqrt(Math.pow(target.width(), 2) + Math.pow(target.height(), 2))/2));
     var ratio = 10;
     
     target = $(target).first();
     if (target.length > 0) {
-      target.filter('.in-code-button, .floating-toolbar-button').addClass('click-me');
+      var existing = _.currentCircs.first((i, c) => target.is($(c).data('circTarget')));
+      if (existing.length == 1) {
+        existing.position({ my: 'center', at: 'center', of: existing.data('circTarget') });
+        return existing;
+      } else {
+        target.filter('.in-code-button, .floating-toolbar-button').addClass('click-me');
 
-      var circ = $('<div/>')
-        .addClass('circle-around')
-        .width(minRadius * ratio)
-        .height(minRadius * ratio)
-        .appendTo(scrollParent)
-        .position({ my: 'center', at: 'center', of: target });
+        var circ = $('<div/>')
+          .addClass('circle-around')
+          .width(minRadius * ratio)
+          .height(minRadius * ratio)
+          .appendTo(scrollParent)
+          .data('circTarget', target)
+          .position({ my: 'center', at: 'center', of: target });
 
-      target.on('click', function(_ev) { _.removeCircs(); });
-      target.on('remove', function(_ev) { _.removeCircs(); });
-      if (target.attr('tabindex') == '-1' || ! target.attr('tabindex')) { target.attr('tabindex', 0); } // make focussable
-      target.focus();
+        target.on('click', function(_ev) { _.removeCircs(); });
+        target.on('remove', function(_ev) { _.removeCircs(); });
+        if (target.attr('tabindex') == '-1' || ! target.attr('tabindex')) { target.attr('tabindex', 0); } // make focussable
+        target.focus();
 
-      _.removeCircs();
-      _.currentCircs = (_.currentCircs || $()).add(circ);
-      console.log('circ_', 'add', _.currentCircs);
+        _.removeCircs();
+        _.currentCircs = _.currentCircs.add(circ);
+        console.log('circ_', 'add', _.currentCircs);
 
-      return circ;
+        return circ;
+      }
     }
   };
 
@@ -895,9 +857,9 @@ var prouf = (function(waitJsCoqLoaded) {
     }
 
     if (next) {
-      return { type: 'end', sentence: null };
-    } else {
       return { type: 'coq', sentence: next };
+    } else {
+      return { type: 'end', sentence: null };
     }
   }
 
@@ -988,9 +950,14 @@ var prouf = (function(waitJsCoqLoaded) {
     }
   };
 
-  _.test = function() {
-    console.log('circ_', 'prouf.test');
+  _.recomputeCurrentAction = function() {
     prouf.sentenceToActions(prouf.getNextSentence());
+  };
+
+  _.test = function() {
+    prouf.recomputeCurrentAction();
+    //console.log('circ_', 'prouf.test');
+    //prouf.sentenceToActions(prouf.getNextSentence());
     //_.removeCirc(c)
   };
   
