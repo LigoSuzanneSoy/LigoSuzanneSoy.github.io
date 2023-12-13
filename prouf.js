@@ -317,7 +317,7 @@ var prouf = (function(waitJsCoqLoaded) {
     }
   };
 
-  _.getBulletTree = function(cmdoc, line) {
+  _.getBulletPath = function(cmdoc, line) {
     var tree = [];
     for (var i = line-1; i > 0; i--) {
       var indentation = _.getTxtIndentation(cmdoc.getLine(i));
@@ -337,6 +337,44 @@ var prouf = (function(waitJsCoqLoaded) {
     }
     return tree;
   };
+
+  prouf.bulletTypes = ['', '-', '+', '*', '--', '++', '**', '---', '+++', '***'];
+  prouf.compareBullet = (a, b) =>
+    prouf.compareInt(prouf.bulletTypes.indexOf(a), prouf.bulletTypes.indexOf(b));
+  prouf.compareIndentation = (a, b) => {
+    if (a.root) { return b.root ? 0 : 1; }
+    if (b.root) { return -1; }
+    return a.indent.length == b.indent.length ? prouf.compareBullet(a.bullet, b.bullet) : prouf.compareInt(a.indent.length, b.indent.length)
+  }
+
+  prouf.getBulletTree = function(cmdoc, from, toExcluded) {
+    // Array of { indent: …, line: number, children: trees }
+    var path = [{indent: '', bullet: '', root: true, bulletAsSpace: '', bulletSpaceAfter: '', spaces: '', unshelved: false, line: 0, children: []}];
+    for (var i = from; i < toExcluded; i++) {
+      var indentation = prouf.getTxtIndentation(cmdoc.getLine(i))
+      indentation.line = i;
+      indentation.children = [];
+
+      while (path.length > 1 && prouf.compareIndentation(indentation, path[path.length-1]) <= 0) {
+        // TODO: check path.length > 1
+        path[path.length-2].children.push(path.pop());
+      }
+      path[path.length] = indentation;
+    }
+    // collapse the last open branch of the tree
+    while(path.length > 1) {
+      path[path.length-2].children.push(path.pop());
+    }
+    return path[0];
+  };
+  prouf.debugBulletTree = function(cmdoc, t, depth) {
+    depth = depth || 0;
+    console.log(depth, cmdoc.getLine(t.line), t)
+    for (var i = 0; i < t.children.length; i++) {
+      prouf.debugBulletTree(cmdoc, t.children[i], depth+1);
+    }
+  }
+  //prouf.debugBulletTree(cmdoc, prouf.getBulletTree(cmdoc, 5, 19))
 
   _.insertTacticCallback = null;
   _.insertTacticHandler = function(msg) {
@@ -501,7 +539,7 @@ var prouf = (function(waitJsCoqLoaded) {
   _.closeUnshelved = function() {
     var last = coq.doc.sentences.last();
     var cmdoc = last.sp.editor;
-    var bulletTree = _.getBulletTree(cmdoc, last.end.line+1);
+    var bulletTree = _.getBulletPath(cmdoc, last.end.line+1);
     if (bulletTree[0].unshelved && cmdoc.getLine(last.end.line+1) == '}') {
       cmdoc.setCursor({line: last.end.line+1, ch:1});
       coq.goCursor();
@@ -568,7 +606,7 @@ var prouf = (function(waitJsCoqLoaded) {
           } else {
             var indentation = '';
             var originator = '';
-            var bt = _.getBulletTree(cmdoc, last.end.line+1);
+            var bt = _.getBulletPath(cmdoc, last.end.line+1);
             for (var i = 0; i < bt.length; i++) {
               if (bt[i].bullet == bullet) {
                 indentation = bt[i].indent;
