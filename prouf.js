@@ -1,18 +1,24 @@
 // my.js
 
 // TODO:
+// WIP: merge rich bullet subtrees (split on newlines etc.)
 // "Run" button under each code block
 // Better hidden boilerplate
-// sub-proofs in separate blocks (mostly done)
+//
+// getNextAction = function() {}
+// doAction() {}
+// readAction() {} # voice synthesis / my own voice
 
 // Scroll:
 // * compute on the flight height of element using planned duration of audio/animation.
 // * reading time live update + progress bar
 // * scroll animations with https://scrollmagic.io/ jQuery plug-in (find a way to shorten animations when user is scrolling far)
+// * natural typing speed (add characters one by one / few by few) as an animation, for "video" mode
 
-// getNextAction = function() {}
-// doAction() {}
-// readAction() {} # voice synthesis / my own voice
+// Fun:
+// window.CLIPPY_CDN = 'https://raw.githubusercontent.com/pi0/clippyjs/master/assets/agents/';
+// https://unpkg.com/clippyjs@0.0.3/dist/clippy.js + <link rel="stylesheet" type="text/css" href="https://raw.githubusercontent.com/pi0/clippyjs/master/assets/clippy.css">
+// clippy.load('Merlin', (agent) => { agent.show(); });
 
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
@@ -347,11 +353,11 @@ var prouf = (function(waitJsCoqLoaded) {
     return a.indent.length == b.indent.length ? prouf.compareBullet(a.bullet, b.bullet) : prouf.compareInt(a.indent.length, b.indent.length)
   }
 
-  prouf.getBulletTree = function(cmdoc, from, toExcluded) {
+  prouf.getBulletTree = function(getLine, from, toExcluded) {
     // Array of { indent: …, line: number, children: trees }
     var path = [{indent: '', bullet: '', root: true, bulletAsSpace: '', bulletSpaceAfter: '', spaces: '', unshelved: false, line: 0, children: []}];
     for (var i = from; i < toExcluded; i++) {
-      var indentation = prouf.getTxtIndentation(cmdoc.getLine(i))
+      var indentation = prouf.getTxtIndentation(getLine(i))
       indentation.line = i;
       indentation.children = [];
 
@@ -376,6 +382,42 @@ var prouf = (function(waitJsCoqLoaded) {
   }
   //prouf.debugBulletTree(cmdoc, prouf.getBulletTree(cmdoc, 5, 19))
 
+  // returns "replacement" but with indentation && line locations to match those of "old"
+  prouf.mergeBulletSubtrees = function(old, replacement) {
+    // handle the root node
+
+    // -> check same # of children
+    if (old.children.length != replacement.children.length) {
+      if (replacement.bullet && replacement.children.length == 0) {
+        // don't cancel using this quick heuristic to detect placeholders.
+        //  `-> TODO: insertTactic should really take a tree instead + have a "placeholder" marker
+        true;
+      } else {
+        return { unmerged: { msg: 'different # of children', old: old, replacement: replacement } };
+      }
+    }
+
+    // -> check same bullet (could also remap bullets but that would mean a deep rewrite)
+    if (old.bullet != replacement.bullet) { return { unmerged: { msg: 'different bullet', old: old, replacement: replacement } }; }
+
+    // -> update indentation in "replacement"
+    replacement.origLine = replacement.line;
+    replacement.line = old.line;
+    replacement.indent = old.indent;
+
+    // for loop / map to handle any children of <replacement>
+    for (var i = 0; i < replacement.children.length; i++) {
+      var updated = prouf.mergeBulletSubtrees(old.children[i], replacement.children[i]);
+      if (updated.unmerged) {
+        return updated.unmerged;
+      } else {
+        replacement.children[i] = updated;
+      }
+    }
+    
+    return replacement;
+  }
+
   _.insertTacticCallback = null;
   _.insertTacticHandler = function(msg) {
     if (_.insertTacticCallback) {
@@ -386,19 +428,10 @@ var prouf = (function(waitJsCoqLoaded) {
   };
 
   _.nextBulletType = function(b) {
-    switch (b) {
-      case '': return '-';
-      case '-': return '+';
-      case '+': return '*';
-      case '*': return '--';
-      case '--': return '++';
-      case '++': return '**';
-      case '**': return '---';
-      case '---': return '+++';
-      case '+++': return '***';
-      case '***': return '(* bullets too deep *)';
-      default: return '(* unknown bullet type: ' + b + ' *)';
-    }
+    var i = prouf.bulletTypes.indexOf(b);
+    if (i >= prouf.bulletTypes.length - 1) { return '(* bullets too deep *)'; }
+    if (i == -1) { return '(* unknown bullet type: ' + b + ' *)'; }
+    return prouf.bulletTypes[i+1];
   };
 
   // ##########################################################################################################################
@@ -447,35 +480,82 @@ var prouf = (function(waitJsCoqLoaded) {
 
     var text = tacs.filter(t => typeof t == 'string' || t instanceof String).join('');
 
-    var c_middle = null;
-    var pos = { line: c.line, ch: c.ch };
-    var todo = [];
-    for (var i = 0; i < tacs.length; i++) {
-      if (typeof tacs[i] == 'string' || tacs[i] instanceof String) {
-        var lines = tacs[i].split('\n');
-        pos = {
-          line: pos.line + lines.length - 1,
-          ch:   (lines.length > 1 ? 0 : pos.ch) + lines[lines.length-1].length
-        }
-      } else {
-        if (tacs[i] instanceof $) {
-          todo[todo.length] = ((i, pos) => () => tacs[i].data('prouf-bookmark', cmdoc.setBookmark(pos, {widget:tacs[i][0]})))(i, pos);
-        } else if (tacs[i] === _.CURSOR) {
-          c_middle = pos;
-        }
-      }
-    }
-    if (c_middle === null) { c_middle = pos; }
-    c_end = pos;
+    // var c_middle = null;
+    // var pos = { line: c.line, ch: c.ch };
+    // var todo = [];
+    // for (var i = 0; i < tacs.length; i++) {
+    //   if (typeof tacs[i] == 'string' || tacs[i] instanceof String) {
+    //     var lines = tacs[i].split('\n');
+    //     pos = {
+    //       line: pos.line + lines.length - 1,
+    //       ch:   (lines.length > 1 ? 0 : pos.ch) + lines[lines.length-1].length
+    //     }
+    //   } else {
+    //     if (tacs[i] instanceof $) {
+    //       todo[todo.length] = ((i, pos) => () => tacs[i].data('prouf-bookmark', cmdoc.setBookmark(pos, {widget:tacs[i][0]})))(i, pos);
+    //     } else if (tacs[i] === _.CURSOR) {
+    //       c_middle = pos;
+    //     }
+    //   }
+    // }
+    // if (c_middle === null) { c_middle = pos; }
+    // c_end = pos;
 
-    console.log('GETRANGE', c, c_end, cmdoc.getRange(c, c_end));
-    if (text != cmdoc.getRange(c, c_end)) {
+    var replacementLines = text.split('\n');
+    var existingBulletSubtree = prouf.getBulletTree(l => cmdoc.getLine(l), c.line, cmdoc.lineCount()).children[0];
+    var newBulletForest = prouf.getBulletTree(l => replacementLines[l], 0, replacementLines.length); // TODO: add a root node? or just iterate the forest?
+    console.log(existingBulletSubtree, newBulletForest);
+    // prouf.debugBulletTree(cmdoc, existingBulletSubtree)
+    if (existingBulletSubtree) {
+      var mergedBulletSubtree = prouf.mergeBulletSubtrees(existingBulletSubtree, newBulletForest.children[0]);  // TODO: iterate the forest
+
+      var pos_text = 0;
+      var taci = 0;
+      var c_middle = null;//
+      var pos = { line: c.line, ch: c.ch };//
+      var recur = function(t) {
+        // insert this node
+        console.log('_______', pos_text, t.origLine, replacementLines[t.origLine], tacs)
+        var new_pos_text = pos_text + replacementLines[t.origLine].length;
+        pos = { line: t.line, ch: 0 }; // TODO: this is very brittle
+        while (taci < tacs.length && pos_text <= new_pos_text) { // todo: extra loops when at the end
+          if (typeof tacs[taci] == 'string' || tacs[taci] instanceof String) {
+            pos_text += tacs[taci].length; // TODO: this is brittle
+            var lines = tacs[taci].split('\n');
+            pos = {
+              line: pos.line + lines.length - 1,
+              ch:   (lines.length > 1 ? 0 : pos.ch) + lines[lines.length-1].length
+            }
+            console.log('_______->', pos_text, taci, tacs[taci], pos);
+          } else {
+            if (tacs[taci] instanceof $) {
+              //todo[todo.length] = ((i, pos) => () => )(i, pos);
+              tacs[taci].data('prouf-bookmark', cmdoc.setBookmark(pos, {widget:tacs[taci][0]}));
+            } else if (tacs[taci] === _.CURSOR) {
+              c_middle = pos;
+            }
+
+            console.log('_______!', pos_text, taci, tacs[taci]);
+          }
+          taci++;
+        }
+
+        // insert its children
+        for (var i = 0; i < t.children.length; i++) { recur(t.children[i]); }
+      }
+      recur(mergedBulletSubtree);
+      if (c_middle === null) { c_middle = pos; }//
+      c_end = pos;//
+
+      console.log(mergedBulletSubtree);
+      prouf.debugBulletTree(cmdoc, mergedBulletSubtree);
+      console.log('used existing (TODO: merge subtrees):', text);
+    } else {
       cmdoc.replaceRange(text + (addedNewLine?'\n':''), c);
       console.log('inserted:', text);
-    } else {
-      console.log('used existing:', text);
     }
-    for (var i = 0; i < todo.length; i++) { todo[i](); }
+    // TODO!!!!!!!!!!!! DO THIS ON THE TREE, not on lines (the numbers will _not_ match)
+    //for (var i = 0; i < todo.length; i++) { todo[i](); }
 
     //var lines = tac.split('\n');
     //var c_middle = { line: c.line + lines.length - 1, ch: c.ch + lines[lines.length-1].length };
