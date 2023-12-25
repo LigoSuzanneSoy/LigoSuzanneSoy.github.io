@@ -353,7 +353,7 @@ var prouf = (function(waitJsCoqLoaded) {
     return a.indent.length == b.indent.length ? prouf.compareBullet(a.bullet, b.bullet) : prouf.compareInt(a.indent.length, b.indent.length)
   }
 
-  prouf.getBulletTree = function(getLine, from, toExcluded) {
+  prouf.getBulletTree_old = function(getLine, from, toExcluded) {
     // Array of { indent: …, line: number, children: trees }
     var path = [{indent: '', bullet: '', root: true, bulletAsSpace: '', bulletSpaceAfter: '', spaces: '', unshelved: false, line: 0, children: []}];
     for (var i = from; i < toExcluded; i++) {
@@ -380,7 +380,34 @@ var prouf = (function(waitJsCoqLoaded) {
       prouf.debugBulletTree(cmdoc, t.children[i], depth+1);
     }
   }
-  //prouf.debugBulletTree(cmdoc, prouf.getBulletTree(cmdoc, 5, 19))
+  //prouf.debugBulletTree(cmdoc, prouf.getBulletTree_old(cmdoc, 5, 19))
+
+  /*
+  var cmdoc = coq.provider.currentFocus.editor.getDoc();
+  var getLine = l => cmdoc.getLine(l)
+  */
+  prouf.getBulletTree = function(getLine, from, toExcluded) {
+    // Array of { indent: …, line: number, children: trees }
+    var root = [];
+    var path = [root];
+    for (var i = from; i < toExcluded; i++) {
+      var indentation = prouf.getTxtIndentation(getLine(i))
+      if (indentation.bullet != '') {
+        path.push(prouf.tac.bullet('-')); // line = i
+      }
+
+      while (path.length > 1 && prouf.compareIndentation(indentation, path[path.length-1]) <= 0) {
+        // TODO: check path.length > 1
+        path[path.length-2].children.push(path.pop());
+      }
+      path[path.length] = indentation;
+    }
+    // collapse the last open branch of the tree
+    while(path.length > 1) {
+      path[path.length-2].children.push(path.pop());
+    }
+    return prouf.tac.concat(path[0]);
+  };
 
   // returns "replacement" but with indentation && line locations to match those of "old"
   prouf.mergeBulletSubtrees = function(old, replacement) {
@@ -450,7 +477,120 @@ var prouf = (function(waitJsCoqLoaded) {
   };
   // ##########################################################################################################################
 
-  _.CURSOR = { uniqueObject: "CURSOR" }; // cursor marker
+  _.CURSOR = { type: 'cursor', uniqueObject: "CURSOR" }; // cursor marker
+
+  // Module Tac: semantic diff AST for tactics & vernacular
+  _.tac = {
+    IndentRelativeTo: {
+      'vernac': 'vernac',
+      'ltac': 'ltac',
+    },
+    concat: (...children) => ({
+      type: 'concat',
+      children: children.flat(Infinity).map(c => c.type != 'concat' ? c : c.children ).flat().filter(c => c.type != 'empty')
+    }),
+
+    // possible AST cases:
+    placeholder: () => ({ type: 'placeholder' }),
+    newLine: () => ({ type: 'newLine' }),
+    empty: () => ({type: 'empty' }),
+    bullet: function(relativeType, ...children) { return { type: 'bullet', relativeType: relativeType, children: _.tac.concat(children).children }; },
+    text: (relativeIndent, indentRelativeTo, text) => ({ type: 'ltac', relativeIndent: relativeIndent, indentRelativeTo: indentRelativeTo, text: text }),
+    cursor: () => _.CURSOR,
+  }
+
+  _.insertTacTree = function(tacs, recursion) {
+    var tacs = _.tac.concat(tacs).children;
+    var cmdoc = coq.provider.currentFocus.editor.getDoc();
+    var pos_orig = coq.doc.sentences.last().end;
+    var addedNewLine = false;
+    if (cmdoc.getLine(pos_orig.line).trim() == '') {
+      // we're on an empty line, let's write here.
+    } else {
+      // we'll write on the next line
+      pos_orig.line++; pos_orig.ch=0;
+      if (cmdoc.getLine(pos_orig.line).trim() != '') {
+        // push the existing content down one line
+        addedNewLine = true;
+      }
+    }
+    var pos = { line: pos_orig.line, ch: pos_orig.ch };
+
+    // TODO: get the entire tree for the code block; as we may need to insert tactics that de-indent.
+    var existingBulletSubtree = prouf.getBulletTree(l => cmdoc.getLine(l), pos_orig.line, cmdoc.lineCount() - pos_orig.line);
+    console.log('INSERTTACTREE', tacs, existingBulletSubtree);
+
+    var recur = function(exis, tacs, state) {
+      console.log(exis, tacs);
+      var i = 0;
+      var ipos = 0;
+      var j = 0;
+      var jpos = 0;
+      while (j < tacs.length) {
+        switch (tacs[j].type) {
+        case 'placeholder':
+          if (j != tacs.length - 1) { throw 'placeholder can only appear as the last child (for now)'; }
+          // TODO: advance i? how much?
+          debugger;
+          // done with the children of this node, everything else falls inside the placeholder
+          j = tacs.length;
+        break;
+
+        case 'newLine':
+          i++; // next sentence in the existing AST
+          j++; // next line in the diff AST
+        break;
+        
+        case 'empty':
+          console.log('"empty" in semantic diff AST, should not happen. Skipping.');
+          j++;
+        break;
+
+        case 'bullet':
+          if (exis[i].bullet == '') {
+            console.log('no bullet vs. bullet', exis, i, tacs, j)
+          } else {
+            state.bullet += tacs[j].relativeType;
+            state.indentLtac += prouf.bulletTypes[state.bullet].length;
+            recur(tacs[i].children);
+          }
+        break;
+
+        case 'ltac':
+          // TODO: check that the text matches and that it's not a bullet item.
+          if (tacs[j].indentRelativeTo == _.tac.IndentRelativeTo.vernac) {
+            // copy the vernac indent into the ltac one
+            state.indentLtac = state.indentVernac + tacs[j].relativeIndent;
+          } else if (tacs[j].indentRelativeTo == _.tac.IndentRelativeTo.ltac) {
+            state.indentLtac += tacs[j].relativeIndent;
+          } else {
+            throw "unknown IndentRelativeTo:" + tacs[j].indentRelativeTo
+          }
+
+          console.log(exis[i], tacs[j])
+          debugger;
+          // TODO: compare exis[i].text[:shortest] tacs[j].text[:shortest]
+          // if != bail out, if == then advance ipos and jpos
+
+          // i++; // next sentence in the existing AST, but only if we reached the end of this sentence.
+          j++; // next element in the diff AST
+        break;
+
+        case 'cursor':
+          throw 'todo cursor (memorize pos?)';
+          j++;
+        break;
+
+        default:
+          throw 'unknown case';
+        break;
+        }
+      }
+    };
+
+    debugger;
+    recur(existingBulletSubtree.children, tacs, { bullet: '', indentLtac: 0, indentVernac: 0 });
+  }
 
   _.insertTactic = function(tacs, recursion) {
     var cmdoc = coq.provider.currentFocus.editor.getDoc();
@@ -502,8 +642,8 @@ var prouf = (function(waitJsCoqLoaded) {
     // c_end = pos;
 
     var replacementLines = text.split('\n');
-    var existingBulletSubtree = prouf.getBulletTree(l => cmdoc.getLine(l), c.line, cmdoc.lineCount()).children[0];
-    var newBulletForest = prouf.getBulletTree(l => replacementLines[l], 0, replacementLines.length); // TODO: add a root node? or just iterate the forest?
+    var existingBulletSubtree = prouf.getBulletTree_old(l => cmdoc.getLine(l), c.line, cmdoc.lineCount()).children[0];
+    var newBulletForest = prouf.getBulletTree_old(l => replacementLines[l], 0, replacementLines.length); // TODO: add a root node? or just iterate the forest?
     console.log(existingBulletSubtree, newBulletForest);
     // prouf.debugBulletTree(cmdoc, existingBulletSubtree)
     if (existingBulletSubtree) {
@@ -650,7 +790,7 @@ var prouf = (function(waitJsCoqLoaded) {
       if ($("#goal-text").find(".no-goals").length == 1) {
         if ($("#goal-text").find(".no-goals").text() == 'No more goals.') {
           _.closeUnshelved();
-          _.insertTactic((_ => ['Qed.']), true);
+          _.insertTacTree(_.tac.text(0, _.tac.IndentRelativeTo.vernac, 'Qed.'), true);
         } else if ($("#goal-text").find(".no-goals").text() == 'All the remaining goals are on the shelf.') {
           var goalInfo = globalLastGoalInfo;
           console.log('SHELF:', 'All the remaining goals are on the shelf.', goalInfo);
@@ -660,14 +800,22 @@ var prouf = (function(waitJsCoqLoaded) {
             } else {
               var shelfNamed = goalInfo.data[2].shelf.map(s => s.info.name[0] == 'Id' ? s.info.name[1] : null).filter(s => s !== null);
               if (shelfNamed.length > 0) {
-                _.insertTactic(_indentation => 
+                _.insertTacTree(shelfNamed.map((name, idx) =>
+                  _.tac.concat(
+                    (idx == 0) ? _.tac.empty() : _.tac.newLine(),
+                    _.tac.text(0, 'vernac', '[' + name + ']:{'),
+                    (idx == 0) ? _.tac.cursor() : _.tac.empty(),
+                    _.tac.text(0, 'vernac', '}')
+                  )
+                ).flat());
+                /*_.insertTactic(_indentation => 
                   shelfNamed.map((name, idx) => [
                     (idx == 0) ? '' : '\n',
                     '[' + name + ']:{\n',
                     (idx == 0) ? _.CURSOR : '',
                     '}'
                   ]).flat()
-                );
+                );*/
               }
             }
           }
@@ -696,7 +844,7 @@ var prouf = (function(waitJsCoqLoaded) {
                 break;
               }
             }
-            _.insertTactic((_ => [indentation + bullet + ' ' + originator]), true);
+            _.insertTacTree(_.tac.concat(_.tac.bullet(bullet), _.tac.text(0, _.tac.IndentRelativeTo.ltac, originator)), true);
           }
         }
         return true; // stop tracking this execution.
@@ -793,7 +941,7 @@ var prouf = (function(waitJsCoqLoaded) {
 
       var bar = _.floating_toolbar(target,
         _.button('unfold', 'unfold', function() {
-          _.insertTactic('unfold ' + target_text + '.');
+          _.insertTacTree(_.tac.text(0, _.tac.IndentRelativeTo.ltac, 'unfold ' + target_text + '.'));
         }),
         _.button('case_eq', 'case_eq', async function() {
           var constructors = [];
@@ -821,6 +969,23 @@ var prouf = (function(waitJsCoqLoaded) {
               ').');
             constructors = constructors.map(c => c.join(' '));
             constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substring(1, c.length-1).trim() : c);
+            _.insertTacTree(_.tac.concat(
+              _.tac.text(0, _.tac.IndentRelativeTo.ltac, 'case_eq ' + target_text + '.'),
+              constructors.map((c, i) =>
+              _.tac.concat(
+                _.tac.newLine(),
+                _.tac.bullet(+1,
+                  _.tac.text(0, _.tac.IndentRelativeTo.ltac, ' when ' + c.trim() + ' as H' + target_text.trim() + '.'),
+                  $('<button class="in-code-button do-later"/>')
+                    .text('do later')
+                    .one('click', ev => {
+                      // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
+                      $(ev.target).data('prouf-bookmark').clear();
+                      _.insertTacTree(_.tac.text(0, _.tac.IndentRelativeTo.ltac, 'subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.'));
+                    }),
+                  i == 0 ? _.tac.cursor() : _.tac.empty(),
+                  _.tac.placeholder())))));
+              /*
             _.insertTactic(indent => {
               var bulletType = _.nextBulletType(indent.bullet);
               var bullets = constructors.map(c => [
@@ -841,6 +1006,7 @@ var prouf = (function(waitJsCoqLoaded) {
                 bullets.slice(1).flat()
               );
             });
+            */
           }
         }));
     });
@@ -876,6 +1042,28 @@ var prouf = (function(waitJsCoqLoaded) {
     
   }
 
+  _.darkmode_on = function() {
+    $('.jscoq-theme-light').removeClass('jscoq-theme-light').addClass('jscoq-theme-dark');
+    $('.cm-s-default').removeClass('cm-s-default').addClass('cm-s-blackboard');
+    CodeMirror.defaults.theme = 'blackboard';
+    $('html').removeClass('light').addClass('dark');
+  }
+
+  _.darkmode_off = function() {
+    $('.jscoq-theme-dark').removeClass('jscoq-theme-dark').addClass('jscoq-theme-light');
+    $('.cm-s-blackboard').removeClass('cm-s-blackboard').addClass('cm-s-default');
+    CodeMirror.defaults.theme = 'default';
+    $('html').removeClass('dark').addClass('light');
+  }
+
+  _.init_darkmode = function() {
+    if (window.matchMedia) {
+      var m = window.matchMedia('(prefers-color-scheme: dark)');
+      if (m.matches) { _.darkmode_on(); }
+      m.addEventListener('change', ev => ev.matches ? _.darkmode_on() : _.darkmode_off());
+    }
+  }
+
   _.initialized = new _.Deferred();
   _.init = async function() {
     if (_.initialized.isResolved) { return; }
@@ -885,6 +1073,7 @@ var prouf = (function(waitJsCoqLoaded) {
     coq = jsCoqInstance;
     $ = _.extendJQuery(jQuery);
     
+    _.init_darkmode();
     _.my_init();
 
     await _.waitJsCoqReady;

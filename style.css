@@ -1,3 +1,129 @@
+html.dark {
+  --tuto-scrollbar-bg: #222;
+  --tuto-scrollbar-thumb: #888;
+  --tuto-body-bg: #1c1c1c;
+  --tuto-background: black;
+  --tuto-foreground: #ccc;
+  --tuto-border: #222;
+  --tuto-code-background: #111;
+  --tuto-code-foreground: #04c; /* not adjusted */
+  --tuto-h1-foreground: #ddd;
+  --tuto-pre-em-foreground: red; /* not adjusted */
+  --tuto-kbd-fg: #bbb;
+  --tuto-kbd-bg: aliceblue; /* not adjusted */
+  --tuto-kbd-border: gray; /* not adjusted */
+  --tuto-pre-background: #111;
+  --tuto-pre-border: #333;
+  --tuto-hr: #555;
+  --tuto-blockquote: #333;
+  --tuto-blockquote-background: #0f0f0f;
+  --tuto-varblock-border: #888;
+  --tuto-coq-eval-ok-bg: #bef0be; /* not adjusted */
+  --tuto-coq-eval-pending-bg: #bebef0; /* not adjusted */
+  --tuto-waiting-fg: black;
+}
+
+html, html.light {
+  --tuto-scrollbar-bg: #eee;
+  --tuto-scrollbar-thumb: #888;
+  --tuto-body-bg: #e4e4e4;
+  --tuto-background: white;
+  --tuto-foreground: #333;
+  --tuto-border: #ddd;
+  --tuto-code-background: #eee;
+  --tuto-code-foreground: #04c;
+  --tuto-h1-foreground: #222;
+  --tuto-pre-em-foreground: red;
+  --tuto-kbd-fg: #444;
+  --tuto-kbd-bg: aliceblue;
+  --tuto-kbd-border: gray;
+  --tuto-pre-background: #eee;
+  --tuto-pre-border: #ccc;
+  --tuto-hr: #aaa;
+  --tuto-blockquote: #ccc;
+  --tuto-blockquote-background: #f0f0f0;
+  --tuto-varblock-border: #888;
+  --tuto-coq-eval-ok-bg: #bef0be;
+  --tuto-coq-eval-pending-bg: #bebef0;
+  --tuto-waiting-fg: black;
+}
+
+/* TODO: is @media { html } more specific than just html? */
+/* codemirror: cm-s-blackboard instead of cm-s-default */
+@media (prefers-color-scheme: dark) {
+  html {
+    --tuto-scrollbar-bg: #222;
+    --tuto-scrollbar-thumb: #888;
+    --tuto-body-bg: #1c1c1c;
+    --tuto-background: black;
+    --tuto-foreground: #ccc;
+    --tuto-border: #222;
+    --tuto-code-background: #111;
+    --tuto-code-foreground: #04c; /* not adjusted */
+    --tuto-h1-foreground: #ddd;
+    --tuto-pre-em-foreground: red; /* not adjusted */
+    --tuto-kbd-fg: #bbb;
+    --tuto-kbd-bg: aliceblue; /* not adjusted */
+    --tuto-kbd-border: gray; /* not adjusted */
+    --tuto-pre-background: #111;
+    --tuto-pre-border: #333;
+    --tuto-hr: #555;
+    --tuto-blockquote: #333;
+    --tuto-blockquote-background: #0f0f0f;
+    --tuto-varblock-border: #888;
+    --tuto-coq-eval-ok-bg: #bef0be; /* not adjusted */
+    --tuto-coq-eval-pending-bg: #bebef0; /* not adjusted */
+    --tuto-waiting-fg: black;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  html {
+    --tuto-scrollbar-bg: #eee;
+    --tuto-scrollbar-thumb: #888;
+    --tuto-body-bg: #e4e4e4;
+    --tuto-background: white;
+    --tuto-foreground: #333;
+    --tuto-border: #ddd;
+    --tuto-code-background: #eee;
+    --tuto-code-foreground: #04c;
+    --tuto-h1-foreground: #222;
+    --tuto-pre-em-foreground: red;
+    --tuto-kbd-fg: #444;
+    --tuto-kbd-bg: aliceblue;
+    --tuto-kbd-border: gray;
+    --tuto-pre-background: #eee;
+    --tuto-pre-border: #ccc;
+    --tuto-hr: #aaa;
+    --tuto-blockquote: #ccc;
+    --tuto-blockquote-background: #f0f0f0;
+    --tuto-varblock-border: #888;
+    --tuto-coq-eval-ok-bg: #bef0be;
+    --tuto-coq-eval-pending-bg: #bebef0;
+    --tuto-waiting-fg: black;
+  }
+}
+
+html.dark * {
+  scrollbar-color: dark;
+}
+
+html.light * {
+  scrollbar-color: light;
+}
+
+::-webkit-scrollbar {
+  background: var(--tuto-scrollbar-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--tuto-scrollbar-thumb);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--tuto-scrollbar-bg);
+}
+
 html {
   margin: 0;
   padding: 0;
@@ -12,16 +138,20 @@ body {
   transition: background-color 1000ms linear;
 }
 
+html body.jscoq-main {
+  background: var(--tuto-body-bg);
+}
+
 #tutorial {
-  background: white;
-  border: thick solid #ddd;
+  background: var(--tuto-background);
+  border: thick solid var(--tuto-border);
   border-radius: 2em;
   padding: 0.5em 2em 1.5em;
   max-width: 40em;
   margin: 2em auto;
   font-family: Helvetica,Arial,sans-serif;
   font-size: 120%;
-  color: #333;
+  color: var(--tuto-foreground);
   line-height: 1.3em;
 }
 
@@ -30,12 +160,12 @@ body {
 }
 
 h1 {
-  color: #222;
+  color: var(--tuto-h1-foreground);
 }
 
 code {
-  color: #04c;
-  background: #eee;
+  color: var(--tuto-code-foreground);
+  background: var(--tuto-code-background);
   padding: 0.1em 0.3em;
 }
 
@@ -44,14 +174,14 @@ input, select {
 }
 
 pre em {
-  color: red;
+  color: var(--tuto-pre-em-foreground);
   font-style: normal;
 }
 
 kbd {
-  color: #444;
-  background-color: aliceblue;
-  border: thin solid gray;
+  color: var(--tuto-kbd-fg);
+  background-color: var(--tuto-kbd-bg);
+  border: thin solid var(--tuto-kbd-border);
   border-radius: .5ex;
   padding-left: .5ex;
   padding-right: .5ex;
@@ -67,8 +197,8 @@ pre kbd {
 
 pre {
   overflow: auto;	
-  background: #eee;
-  border: thin solid #ccc;
+  background: var(--tuto-pre-background);
+  border: thin solid var(--tuto-pre-border);
   padding: .5em;
   border-radius: .5em;
 }
@@ -76,8 +206,8 @@ pre {
 hr {
   margin: 1em 25%;
   height: .35ex;
-  color: #aaa;
-  background-color: #aaa;
+  color: var(--tuto-hr);
+  background-color: var(--tuto-hr);
   border: none;
   border-radius: .175ex;
 }
@@ -86,9 +216,9 @@ hr {
  * https://github.com/tetue/tinytypo/blob/5f7411746c8c4d634ac8cd14c730b86f4ffd1813/css/typo.css#L397
  */
 blockquote {
-  border-left: 0.85ex solid #ccc;
+  border-left: 0.85ex solid var(--tuto-blockquote);
   padding: 0.8ex 1ex;
-  background: #f0f0f0;
+  background: var(--tuto-blockquote-background);
   margin: 1em 2em;
 }
 
@@ -99,7 +229,7 @@ ul:last-child {
 
 .varblock {
   display: inline-block;
-  border: thin solid #888;
+  border: thin solid var(--tuto-varblock-border);
   padding: 0 .5em;
   border-radius: .5em;
 }
@@ -118,17 +248,17 @@ html #jscoq-plug { /* override using html as an extra qualifier */
 }
 
 html .coq-eval-ok { /* override using html as an extra qualifier */
-  background-color: #bef0be;
+  background-color: var(--tuto-coq-eval-ok-bg);
 }
 
 html .coq-eval-pending { /* override using html as an extra qualifier */
-  background-color: #bebef0;
+  background-color: var(--tuto-coq-eval-pending-bg);
 }
 
 .waiting #jscoq-plug::after {
   content: '▶️' !important;
   opacity: 0;
-  color: black;
+  color: var(--tuto-waiting-fg);
   padding-left: 35px;
   display: block;
   height: 32px;
