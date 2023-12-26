@@ -362,7 +362,6 @@ var prouf = (function(waitJsCoqLoaded) {
       indentation.children = [];
 
       while (path.length > 1 && prouf.compareIndentation(indentation, path[path.length-1]) <= 0) {
-        // TODO: check path.length > 1
         path[path.length-2].children.push(path.pop());
       }
       path[path.length] = indentation;
@@ -385,28 +384,34 @@ var prouf = (function(waitJsCoqLoaded) {
   /*
   var cmdoc = coq.provider.currentFocus.editor.getDoc();
   var getLine = l => cmdoc.getLine(l)
+  prouf.getBulletTree(getLine, 5, 19)
   */
   prouf.getBulletTree = function(getLine, from, toExcluded) {
     // Array of { indent: …, line: number, children: trees }
-    var root = [];
+    var root = {children:[]};
     var path = [root];
+    var pathi = [{indent: '', bullet: '', root: true, bulletAsSpace: '', bulletSpaceAfter: '', spaces: '', unshelved: false, line: 0, children: []}];
     for (var i = from; i < toExcluded; i++) {
       var indentation = prouf.getTxtIndentation(getLine(i))
-      if (indentation.bullet != '') {
-        path.push(prouf.tac.bullet('-')); // line = i
+
+      while (path.length > 1 && prouf.compareIndentation(indentation, pathi[pathi.length-1]) <= 0) {
+        path[path.length-2].children.push(path.pop());
+        pathi.pop();
       }
 
-      while (path.length > 1 && prouf.compareIndentation(indentation, path[path.length-1]) <= 0) {
-        // TODO: check path.length > 1
-        path[path.length-2].children.push(path.pop());
+      if (indentation.bullet != '') {
+        path.push(prouf.tac.bullet(indentation.bullet)); // line = i
+        pathi.push(indentation);
+      } else {
+        path.push(prouf.tac.text(indentation.indent, getLine(i))); // todo: trim/rm bullet from getLine(i)
+        debugger;
       }
-      path[path.length] = indentation;
     }
     // collapse the last open branch of the tree
     while(path.length > 1) {
       path[path.length-2].children.push(path.pop());
     }
-    return prouf.tac.concat(path[0]);
+    return path[0];
   };
 
   // returns "replacement" but with indentation && line locations to match those of "old"
@@ -479,8 +484,8 @@ var prouf = (function(waitJsCoqLoaded) {
 
   _.CURSOR = { type: 'cursor', uniqueObject: "CURSOR" }; // cursor marker
 
-  // Module Tac: semantic diff AST for tactics & vernacular
-  _.tac = {
+  // Module Diff: semantic diff AST for tactics & vernacular
+  _.diff = {
     IndentRelativeTo: {
       'vernac': 'vernac',
       'ltac': 'ltac',
@@ -494,13 +499,22 @@ var prouf = (function(waitJsCoqLoaded) {
     placeholder: () => ({ type: 'placeholder' }),
     newLine: () => ({ type: 'newLine' }),
     empty: () => ({type: 'empty' }),
-    bullet: function(relativeType, ...children) { return { type: 'bullet', relativeType: relativeType, children: _.tac.concat(children).children }; },
-    text: (relativeIndent, indentRelativeTo, text) => ({ type: 'ltac', relativeIndent: relativeIndent, indentRelativeTo: indentRelativeTo, text: text }),
+    bullet: (relativeType, ...children) => ({ type: 'bullet', relativeType: relativeType, children: _.diff.concat(children).children }),
+    text: (relativeIndent, indentRelativeTo, heading, ...children) => ({ type: 'ltac', relativeIndent: relativeIndent, indentRelativeTo: indentRelativeTo, text: heading, children: children }),
+    cursor: () => _.CURSOR,
+  }
+
+  // Module tac: AST for tactics & vernacular
+  _.tac = {
+    // possible AST cases:
+    newLine: () => ({ type: 'newLine' }),
+    bullet: function(bulletType) { return { type: 'bullet', bulletType: bulletType, children: [] }; },
+    text: (indent, text) => ({ type: 'ltac', indent: indent, text: text, children: [] }),
     cursor: () => _.CURSOR,
   }
 
   _.insertTacTree = function(tacs, recursion) {
-    var tacs = _.tac.concat(tacs).children;
+    var tacs = _.diff.concat(tacs).children;
     var cmdoc = coq.provider.currentFocus.editor.getDoc();
     var pos_orig = coq.doc.sentences.last().end;
     var addedNewLine = false;
@@ -558,10 +572,10 @@ var prouf = (function(waitJsCoqLoaded) {
 
         case 'ltac':
           // TODO: check that the text matches and that it's not a bullet item.
-          if (tacs[j].indentRelativeTo == _.tac.IndentRelativeTo.vernac) {
+          if (tacs[j].indentRelativeTo == _.diff.IndentRelativeTo.vernac) {
             // copy the vernac indent into the ltac one
             state.indentLtac = state.indentVernac + tacs[j].relativeIndent;
-          } else if (tacs[j].indentRelativeTo == _.tac.IndentRelativeTo.ltac) {
+          } else if (tacs[j].indentRelativeTo == _.diff.IndentRelativeTo.ltac) {
             state.indentLtac += tacs[j].relativeIndent;
           } else {
             throw "unknown IndentRelativeTo:" + tacs[j].indentRelativeTo
@@ -790,7 +804,7 @@ var prouf = (function(waitJsCoqLoaded) {
       if ($("#goal-text").find(".no-goals").length == 1) {
         if ($("#goal-text").find(".no-goals").text() == 'No more goals.') {
           _.closeUnshelved();
-          _.insertTacTree(_.tac.text(0, _.tac.IndentRelativeTo.vernac, 'Qed.'), true);
+          _.insertTacTree(_.diff.text(0, _.diff.IndentRelativeTo.vernac, 'Qed.'), true);
         } else if ($("#goal-text").find(".no-goals").text() == 'All the remaining goals are on the shelf.') {
           var goalInfo = globalLastGoalInfo;
           console.log('SHELF:', 'All the remaining goals are on the shelf.', goalInfo);
@@ -801,11 +815,11 @@ var prouf = (function(waitJsCoqLoaded) {
               var shelfNamed = goalInfo.data[2].shelf.map(s => s.info.name[0] == 'Id' ? s.info.name[1] : null).filter(s => s !== null);
               if (shelfNamed.length > 0) {
                 _.insertTacTree(shelfNamed.map((name, idx) =>
-                  _.tac.concat(
-                    (idx == 0) ? _.tac.empty() : _.tac.newLine(),
-                    _.tac.text(0, 'vernac', '[' + name + ']:{'),
-                    (idx == 0) ? _.tac.cursor() : _.tac.empty(),
-                    _.tac.text(0, 'vernac', '}')
+                  _.diff.concat(
+                    (idx == 0) ? _.diff.empty() : _.diff.newLine(),
+                    _.diff.text(0, 'vernac', '[' + name + ']:{'),
+                    (idx == 0) ? _.diff.cursor() : _.diff.empty(),
+                    _.diff.text(0, 'vernac', '}')
                   )
                 ).flat());
                 /*_.insertTactic(_indentation => 
@@ -844,7 +858,7 @@ var prouf = (function(waitJsCoqLoaded) {
                 break;
               }
             }
-            _.insertTacTree(_.tac.concat(_.tac.bullet(bullet), _.tac.text(0, _.tac.IndentRelativeTo.ltac, originator)), true);
+            _.insertTacTree(_.diff.concat(_.diff.bullet(bullet), _.diff.text(0, _.diff.IndentRelativeTo.ltac, originator)), true);
           }
         }
         return true; // stop tracking this execution.
@@ -941,7 +955,7 @@ var prouf = (function(waitJsCoqLoaded) {
 
       var bar = _.floating_toolbar(target,
         _.button('unfold', 'unfold', function() {
-          _.insertTacTree(_.tac.text(0, _.tac.IndentRelativeTo.ltac, 'unfold ' + target_text + '.'));
+          _.insertTacTree(_.diff.text(0, _.diff.IndentRelativeTo.ltac, 'unfold ' + target_text + '.'));
         }),
         _.button('case_eq', 'case_eq', async function() {
           var constructors = [];
@@ -969,22 +983,22 @@ var prouf = (function(waitJsCoqLoaded) {
               ').');
             constructors = constructors.map(c => c.join(' '));
             constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substring(1, c.length-1).trim() : c);
-            _.insertTacTree(_.tac.concat(
-              _.tac.text(0, _.tac.IndentRelativeTo.ltac, 'case_eq ' + target_text + '.'),
-              constructors.map((c, i) =>
-              _.tac.concat(
-                _.tac.newLine(),
-                _.tac.bullet(+1,
-                  _.tac.text(0, _.tac.IndentRelativeTo.ltac, ' when ' + c.trim() + ' as H' + target_text.trim() + '.'),
-                  $('<button class="in-code-button do-later"/>')
-                    .text('do later')
-                    .one('click', ev => {
-                      // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
-                      $(ev.target).data('prouf-bookmark').clear();
-                      _.insertTacTree(_.tac.text(0, _.tac.IndentRelativeTo.ltac, 'subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.'));
-                    }),
-                  i == 0 ? _.tac.cursor() : _.tac.empty(),
-                  _.tac.placeholder())))));
+            _.insertTacTree(
+              _.diff.text(0, _.diff.IndentRelativeTo.ltac, 'case_eq ' + target_text + '.',
+                constructors.map((c, i) =>
+                _.diff.concat(
+                  _.diff.newLine(),
+                  _.diff.bullet(+1,
+                    _.diff.text(0, _.diff.IndentRelativeTo.ltac, ' when ' + c.trim() + ' as H' + target_text.trim() + '.'),
+                    $('<button class="in-code-button do-later"/>')
+                      .text('do later')
+                      .one('click', ev => {
+                        // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
+                        $(ev.target).data('prouf-bookmark').clear();
+                        _.insertTacTree(_.diff.text(0, _.diff.IndentRelativeTo.ltac, 'subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.'));
+                      }),
+                    i == 0 ? _.diff.cursor() : _.diff.empty(),
+                    _.diff.placeholder())))));
               /*
             _.insertTactic(indent => {
               var bulletType = _.nextBulletType(indent.bullet);
@@ -1085,12 +1099,18 @@ var prouf = (function(waitJsCoqLoaded) {
       var first = cm.editor.options.firstLineNumber;
       return first <= line && first + cm.editor.lastLine() >= line;
     });
-    cm.editor.scrollIntoView(line - cm.editor.options.firstLineNumber)
     var l = line - cm.editor.options.firstLineNumber;
     cm.editor.setCursor({ line: l, ch: cm.editor.getLine(l).length });
     coq.provider.currentFocus = cm;
+
+    var old_scroll = {y:$('main')[0].scrollTop, x:$('main')[0].scrollLeft}; // cm.editor.focus accidentally scrolls
     cm.editor.focus();
-    coq.goCursor();
+    $('main')[0].scrollTo(old_scroll.x, old_scroll.y);
+
+    cm.editor.scrollIntoView(l);
+    window.setTimeout(function() {
+      coq.goCursor(); // for some reason this interrupts scrolling, delaying (TODO: not by 1000ms but wait for end of smooth scroll)
+    }, 1000);
 
     $(document.body).on('click', '.CodeMirror-linenumber', function(ev) { window.location.href = '#' + $(ev.target).text(); });
 

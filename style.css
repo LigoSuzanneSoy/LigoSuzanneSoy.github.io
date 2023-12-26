@@ -18,8 +18,8 @@ html.dark {
   --tuto-blockquote: #333;
   --tuto-blockquote-background: #0f0f0f;
   --tuto-varblock-border: #888;
-  --tuto-coq-eval-ok-bg: #bef0be; /* not adjusted */
-  --tuto-coq-eval-pending-bg: #bebef0; /* not adjusted */
+  --tuto-coq-eval-ok-bg: #14421f;
+  --tuto-coq-eval-pending-bg: #534912;
   --tuto-waiting-fg: black;
 }
 
@@ -71,8 +71,8 @@ html, html.light {
     --tuto-blockquote: #333;
     --tuto-blockquote-background: #0f0f0f;
     --tuto-varblock-border: #888;
-    --tuto-coq-eval-ok-bg: #bef0be; /* not adjusted */
-    --tuto-coq-eval-pending-bg: #bebef0; /* not adjusted */
+    --tuto-coq-eval-ok-bg: #14421f;
+    --tuto-coq-eval-pending-bg: #534912;
     --tuto-waiting-fg: black;
   }
 }
@@ -138,7 +138,7 @@ body {
   transition: background-color 1000ms linear;
 }
 
-html body.jscoq-main {
+html body.jscoq-main { /* would be nice to enable this once jscoq is loaded. */
   background: var(--tuto-body-bg);
 }
 
@@ -247,7 +247,7 @@ html #jscoq-plug { /* override using html as an extra qualifier */
   position: fixed;
 }
 
-html .coq-eval-ok { /* override using html as an extra qualifier */
+html .coq-eval-ok, html .cm-s-blackboard .coq-eval-ok { /* override using html as an extra qualifier */
   background-color: var(--tuto-coq-eval-ok-bg);
 }
 
