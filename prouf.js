@@ -392,7 +392,8 @@ var prouf = (function(waitJsCoqLoaded) {
     var path = [root];
     var pathi = [{indent: '', bullet: '', root: true, bulletAsSpace: '', bulletSpaceAfter: '', spaces: '', unshelved: false, line: 0, children: []}];
     for (var i = from; i < toExcluded; i++) {
-      var indentation = prouf.getTxtIndentation(getLine(i))
+      var text = getLine(i);
+      var indentation = prouf.getTxtIndentation(text);
 
       while (path.length > 1 && prouf.compareIndentation(indentation, pathi[pathi.length-1]) <= 0) {
         path[path.length-2].children.push(path.pop());
@@ -400,11 +401,36 @@ var prouf = (function(waitJsCoqLoaded) {
       }
 
       if (indentation.bullet != '') {
-        path.push(prouf.tac.bullet(indentation.bullet)); // line = i
+        var rangeBullet = {
+          start: { line: i, ch: indentation.indent },
+          end: { line: i, ch: (indentation.bulletAsSpace).length }
+        };
+        path.push(prouf.tac.bullet(rangeBullet, indentation.bullet)); // line = i
         pathi.push(indentation);
+        var indentation2 = {
+          indent: indentation.spaces,
+          bullet: '',
+          root: false,
+          bulletAsSpace: '',
+          bulletSpaceAfter: '',
+          spaces: indentation.spaces,
+          unshelved: indentation.unshelved, // TODO
+          line: indentation.line,
+          children: []
+        }
+        var range = {
+          start: { line: i, ch: indentation.spaces.length },
+          end: { line: i, ch: text.length }
+        };
+        path.push(prouf.tac.line(range, indentation2.indent, text.substring(indentation2.spaces.length))); // line = i
+        pathi.push(indentation2);
       } else {
-        path.push(prouf.tac.text(indentation.indent, getLine(i))); // todo: trim/rm bullet from getLine(i)
-        debugger;
+        var range = {
+          start: { line: i, ch: indentation.spaces.length },
+          end: { line: i, ch: text.length }
+        }
+        path.push(prouf.tac.line(range, indentation.indent, text.substring(indentation.spaces.length))); // todo: trim/rm bullet from getLine(i)
+        pathi.push(indentation);
       }
     }
     // collapse the last open branch of the tree
@@ -413,6 +439,9 @@ var prouf = (function(waitJsCoqLoaded) {
     }
     return path[0];
   };
+  /*var cmdoc = coq.provider.currentFocus.editor.getDoc();
+  var getLine = l => cmdoc.getLine(l)
+  prouf.getBulletTree(getLine, 5, 19)*/
 
   // returns "replacement" but with indentation && line locations to match those of "old"
   prouf.mergeBulletSubtrees = function(old, replacement) {
@@ -482,8 +511,6 @@ var prouf = (function(waitJsCoqLoaded) {
   };
   // ##########################################################################################################################
 
-  _.CURSOR = { type: 'cursor', uniqueObject: "CURSOR" }; // cursor marker
-
   // Module Diff: semantic diff AST for tactics & vernacular
   _.diff = {
     IndentRelativeTo: {
@@ -496,22 +523,121 @@ var prouf = (function(waitJsCoqLoaded) {
     }),
 
     // possible AST cases:
-    placeholder: () => ({ type: 'placeholder' }),
-    newLine: () => ({ type: 'newLine' }),
     empty: () => ({type: 'empty' }),
     bullet: (relativeType, ...children) => ({ type: 'bullet', relativeType: relativeType, children: _.diff.concat(children).children }),
-    text: (relativeIndent, indentRelativeTo, heading, ...children) => ({ type: 'ltac', relativeIndent: relativeIndent, indentRelativeTo: indentRelativeTo, text: heading, children: children }),
-    cursor: () => _.CURSOR,
+    placeholder: () => ({ type: 'placeholder' }),
+    line: (relativeIndent, indentRelativeTo, heading, ...children) => ({
+      type: 'line',
+      relativeIndent: relativeIndent,
+      indentRelativeTo: indentRelativeTo,
+      heading: typeof heading == 'string' || heading instanceof String
+              ? [prouf.diff.lineElement.text(heading)]
+              : heading.filter(elt => elt.type != 'empty'),
+      children: _.diff.concat(children).children }),
+    // heading sub-case:
+    lineElement: {
+      text: (text) => ({ type: 'text', text: text }),
+      cursor: () => ({ type: 'cursor' }), // instruction to place cursor at this point
+      // button: $(...),
+      // empty: () => ({type: 'empty' }),
+    }
   }
 
   // Module tac: AST for tactics & vernacular
   _.tac = {
     // possible AST cases:
-    newLine: () => ({ type: 'newLine' }),
-    bullet: function(bulletType) { return { type: 'bullet', bulletType: bulletType, children: [] }; },
-    text: (indent, text) => ({ type: 'ltac', indent: indent, text: text, children: [] }),
-    cursor: () => _.CURSOR,
+    bullet: (range, bulletType) => ({ range: range, type: 'bullet', bulletType: bulletType, children: [] }),
+    line: (range, indent, heading) => ({ range: range, type: 'line', indent: indent, heading: typeof heading == 'string' || heading instanceof String ? [prouf.tac.lineElement.text(heading)] : heading, children: [] }),
+    lineElement: {
+      text: (text) => ({ type: 'text', text: text }),
+      cursor: () => { type: 'cursor' }, // instruction to place cursor at this point, not allowed in the input?
+    }
   }
+
+  _.align_headings = function(e_heading, t_heading) {
+    // e_heading must not contain empty text like { type: 'text', text: '' }
+    // t_heading must not contain empty text like { type: 'text', text: '' }
+    e_heading = e_heading.filter(x => x.type != 'text' || x.text != '');
+    t_heading = t_heading.filter(x => x.type != 'text' || x.text != '');
+
+
+    // exis[i].heading == [ "str", CURSOR, "str", "abc", ... ]
+    // tacs[j].heading == [ "strst", CURSOR, "rabc", ...]
+    //
+    // Algorithm to align so that the heading elements have mathcing lengths:
+    //
+    //  expected result: e_aligned = ["str", CURSOR, "st", "r", "abc", ...]
+    //                   t_aligned = ["str", "st", CURSOR, "r", "abc", ...]
+    //
+    // estart = 0
+    // tstart = 0
+    // ii = 0
+    // jj = 0
+    // while ...:
+    //   if exis[i].heading[ii].type != 'text':
+    //     ii++
+    //   else if tacs[j].heading[jj].type != 'text':
+    //     jj++
+    //   else:
+    //     var e = exis[i].heading[ii].substr(estart)
+    //     var t = tacs[j].heading[jj].substr(tstart)
+    //     if e.text.length == t.text.length:
+    //       push(e); push(t)
+    //       estart = 0; tstart = 0;
+    //     else if (e.text.length < t.text.length)
+    //       len = ...
+    //       push(e); push({text: t.substr(0, len)})
+    //       estart = 0; tstart += len
+    //     else // e.text.length > t.text.length
+    //       push({text: e.substr(...)}); push(t)
+    //       estart += len; tstart = 0;
+    var estart = 0;
+    var tstart = 0;
+    var ii = 0;
+    var jj = 0;
+    var e_aligned = [];
+    var t_aligned = [];
+    while (ii < e_heading.length && jj < t_heading.length) {
+      if (e_heading[ii].type != 'text') {
+        e_aligned.push(e_heading[ii++]);
+      } else if (t_heading[jj].type != 'text') {
+        t_aligned.push(t_heading[jj++]);
+      } else {
+        var e = e_heading[ii].text.substring(estart);
+        var t = t_heading[jj].text.substring(tstart);
+        if (e.length == t.length) {
+          e_aligned.push({ type: 'text', text: e }); ii++; estart = 0;
+          t_aligned.push({ type: 'text', text: t }); jj++; tstart = 0;
+        } else if (e.length < t.length) {
+          e_aligned.push({ type: 'text', text: e }); ii++; estart = 0;
+          t_aligned.push({ type: 'text', text: t.substring(0, e.length) }); tstart += e.length;
+          // invariant: tstart < t_heading[jj].text.length
+        } else { // e.length > t.length
+          e_aligned.push({ type: 'text', text: e.substring(0, t.length) }); estart += t.length;
+          t_aligned.push({ type: 'text', text: t }); jj++; tstart = 0;
+          // invariant: estart < e_heading[ii].text.length
+        }
+      }
+    }
+    if (ii < e_heading.length && e_heading[ii].type == 'text') {
+      e_aligned.push({ type: 'text', text: e_heading[ii].text.substring(estart) });
+      ii++;
+    }
+    if (jj < t_heading.length && t_heading[jj].type == 'text') {
+      t_aligned.push({ type: 'text', text: e_heading[jj].text.substring(tstart) });
+      jj++;
+    }
+    while (ii < e_heading.length) { e_aligned.push(e_heading[ii++]); }
+    while (jj < t_heading.length) { t_aligned.push(t_heading[jj++]); }
+
+    return { e_aligned: e_aligned, t_aligned: t_aligned };
+  };
+
+  _.test_align_headings = function() {
+    var e_heading = [ {type: 'text', text: "str" }, { type: 'cursor' }, {type: 'text', text: "STR" }, {type: 'text', text: "abc" }, {type: 'text', text: "def" } ];
+    var t_heading = [ {type: 'text', text: "strST" }, { type: 'cursor' }, {type: 'text', text: "Rabc" }, {type: 'text', text: "d" } ];
+    console.log(_.align_headings(e_heading, t_heading));
+  };
 
   _.insertTacTree = function(tacs, recursion) {
     var tacs = _.diff.concat(tacs).children;
@@ -534,76 +660,118 @@ var prouf = (function(waitJsCoqLoaded) {
     var existingBulletSubtree = prouf.getBulletTree(l => cmdoc.getLine(l), pos_orig.line, cmdoc.lineCount() - pos_orig.line);
     console.log('INSERTTACTREE', tacs, existingBulletSubtree);
 
+    var todos = [];
+    var pos = existingBulletSubtree.children[0].range.start;
+    var printpos = (pos) =>
+      JSON.stringify(pos) + '"'+cmdoc.getLine(pos.line).substring(0, pos.ch)+'|'+cmdoc.getLine(pos.line).substring(pos.ch);
+
     var recur = function(exis, tacs, state) {
-      console.log(exis, tacs);
-      var i = 0;
-      var ipos = 0;
-      var j = 0;
-      var jpos = 0;
-      while (j < tacs.length) {
-        switch (tacs[j].type) {
-        case 'placeholder':
+      for (var i = 0, j = 0; j < tacs.length; i++, j++) {
+        if (tacs[j].type == 'placeholder') {
           if (j != tacs.length - 1) { throw 'placeholder can only appear as the last child (for now)'; }
-          // TODO: advance i? how much?
-          debugger;
           // done with the children of this node, everything else falls inside the placeholder
-          j = tacs.length;
-        break;
-
-        case 'newLine':
-          i++; // next sentence in the existing AST
-          j++; // next line in the diff AST
-        break;
-        
-        case 'empty':
-          console.log('"empty" in semantic diff AST, should not happen. Skipping.');
-          j++;
-        break;
-
-        case 'bullet':
-          if (exis[i].bullet == '') {
-            console.log('no bullet vs. bullet', exis, i, tacs, j)
+          // TODO: COUNT THE NUMBER OF SKIPPED LINES? Or maybe the exis AST should have line numbers.
+          return;
+        } else if (tacs[j].type == 'empty') {
+          console.warn('"empty" in semantic diff AST, should not happen. Skipping.');
+        } else if (tacs[j].type == 'bullet') {
+          // TODO: todos.push(...)
+          if (exis[i].type != 'bullet') {
+            throw { patchFailed: 'no bullet vs. bullet', a: exis[i], b: tacs[j] };
           } else {
-            state.bullet += tacs[j].relativeType;
-            state.indentLtac += prouf.bulletTypes[state.bullet].length;
-            recur(tacs[i].children);
+            pos = exis[i].range.end;
+            var newState = {
+              bullet: state.bullet + tacs[j].relativeType,
+              indentLtac: state.indentLtac + prouf.bulletTypes[state.bullet].length, // TODO
+              indentVernac: state.indentVernac
+            }
+            recur(exis[i].children, tacs[j].children, newState);
           }
-        break;
-
-        case 'ltac':
-          // TODO: check that the text matches and that it's not a bullet item.
-          if (tacs[j].indentRelativeTo == _.diff.IndentRelativeTo.vernac) {
-            // copy the vernac indent into the ltac one
-            state.indentLtac = state.indentVernac + tacs[j].relativeIndent;
-          } else if (tacs[j].indentRelativeTo == _.diff.IndentRelativeTo.ltac) {
-            state.indentLtac += tacs[j].relativeIndent;
+        } else if (tacs[j].type == 'line') {
+          todos.push([
+            'doc.findMarks(from, to ' + JSON.stringify(exis[i].range) + '"'+cmdoc.getRange(exis[i].range.start, exis[i].range.end)+'"' + ') → array<TextMarker> → clear all our marks',
+            ((exis, i) =>
+              () => console.log(exis, i) || cmdoc.findMarks(exis[i].range.start, { line: exis[i].range.end.line+1, ch:0 }).forEach((mark) => {
+                console.log(mark);
+                if (mark.className && mark.className.startsWith('prouf-')) { mark.clear(); }
+                if (mark.replacedWith && $(mark.replacedWith).data('prouf-bookmark')) { $(mark.replacedWith).remove() && mark.clear(); }
+              })
+            )(exis, i)
+          ])
+          if (exis[i].type != 'line') {
+            throw { patchFailed: 'no line vs. line', a: exis[i], b: tacs[j] };
           } else {
-            throw "unknown IndentRelativeTo:" + tacs[j].indentRelativeTo
-          }
+            pos = exis[i].range.start;
+            var { e_aligned, t_aligned } = _.align_headings(exis[i].heading, tacs[i].heading);
+            var ii = 0;
+            var jj = 0;
+            while (jj < t_aligned.length) {
+              if (t_aligned[jj].type == 'text') {
+                while (ii < exis[i].heading.length && exis[i].heading[ii].type != 'text') {
+                  ii++; // skip over non-text content
+                }
+                if (ii >= exis[i].heading.length) { throw 'unexpected case'; }
+                // at this point, ii.type == 'text' (or exception would've been thrown)
+                if (e_aligned[ii].text != t_aligned[jj].text) {
+                  throw { patchFailed: 'different texts', a: e_aligned[ii].text, b: t_aligned[jj].text };
+                }
+                pos = { line: pos.line, ch: pos.ch + e_aligned[ii].text.length };
+                ii++;
+              } else if (t_aligned[jj].type == 'cursor') {
+                todos.push([
+                  'set cursor position to ' + printpos(pos) +'"',
+                  ((pos) =>
+                    () => cmdoc.setCursor(pos)
+                  )(pos)
+                ]);
+              } else if (t_aligned[jj] instanceof $) {
+                todos.push([
+                  'insert the button ' + t_aligned[jj] + ' at ' + printpos(pos)+'"',
+                  ((t_aligned, jj, pos) =>
+                    () => t_aligned[jj].data('prouf-bookmark',
+                      cmdoc.setBookmark(pos, {insertLeft: pos.ch == cmdoc.getLine(pos.line).length, widget:t_aligned[jj][0]}))
+                  )(t_aligned, jj, pos)
+                ]);
+              }
+              jj++;
+            }
 
-          console.log(exis[i], tacs[j])
+            var newState = {
+              bullet: state.bullet,
+              indentLtac: state.indentLtac,
+              indentVernac: state.indentVernac,
+            }
+            pos = exis[i].range.end;
+            recur(exis[i].children, tacs[j].children, newState);
+          }
+        } else {
           debugger;
-          // TODO: compare exis[i].text[:shortest] tacs[j].text[:shortest]
-          // if != bail out, if == then advance ipos and jpos
-
-          // i++; // next sentence in the existing AST, but only if we reached the end of this sentence.
-          j++; // next element in the diff AST
-        break;
-
-        case 'cursor':
-          throw 'todo cursor (memorize pos?)';
-          j++;
-        break;
-
-        default:
-          throw 'unknown case';
-        break;
+          throw "unknown diff AST case";
         }
       }
     };
 
-    debugger;
-    recur(existingBulletSubtree.children, tacs, { bullet: '', indentLtac: 0, indentVernac: 0 });
+    console.log(existingBulletSubtree);
+
+    try {
+      recur(existingBulletSubtree.children, tacs, {
+        bullet: 0,
+        indentLtac: 0,
+        indentVernac: 0,
+      });
+    } catch (e) {
+      if (e.patchFailed) {
+        console.log(e);
+        return false;
+      } else {
+        throw e;
+      }
+    }
+
+    console.log(todos.reverse().map(x => x[0]));
+    
+    cmdoc.getEditor().operation(() => todos.reverse().forEach(x => x[1]()));
+    coq.goCursor();
   }
 
   _.insertTactic = function(tacs, recursion) {
@@ -633,27 +801,6 @@ var prouf = (function(waitJsCoqLoaded) {
     }
 
     var text = tacs.filter(t => typeof t == 'string' || t instanceof String).join('');
-
-    // var c_middle = null;
-    // var pos = { line: c.line, ch: c.ch };
-    // var todo = [];
-    // for (var i = 0; i < tacs.length; i++) {
-    //   if (typeof tacs[i] == 'string' || tacs[i] instanceof String) {
-    //     var lines = tacs[i].split('\n');
-    //     pos = {
-    //       line: pos.line + lines.length - 1,
-    //       ch:   (lines.length > 1 ? 0 : pos.ch) + lines[lines.length-1].length
-    //     }
-    //   } else {
-    //     if (tacs[i] instanceof $) {
-    //       todo[todo.length] = ((i, pos) => () => tacs[i].data('prouf-bookmark', cmdoc.setBookmark(pos, {widget:tacs[i][0]})))(i, pos);
-    //     } else if (tacs[i] === _.CURSOR) {
-    //       c_middle = pos;
-    //     }
-    //   }
-    // }
-    // if (c_middle === null) { c_middle = pos; }
-    // c_end = pos;
 
     var replacementLines = text.split('\n');
     var existingBulletSubtree = prouf.getBulletTree_old(l => cmdoc.getLine(l), c.line, cmdoc.lineCount()).children[0];
@@ -685,7 +832,7 @@ var prouf = (function(waitJsCoqLoaded) {
             if (tacs[taci] instanceof $) {
               //todo[todo.length] = ((i, pos) => () => )(i, pos);
               tacs[taci].data('prouf-bookmark', cmdoc.setBookmark(pos, {widget:tacs[taci][0]}));
-            } else if (tacs[taci] === _.CURSOR) {
+            } else if (tacs[taci].type == 'cursor') {
               c_middle = pos;
             }
 
@@ -804,7 +951,7 @@ var prouf = (function(waitJsCoqLoaded) {
       if ($("#goal-text").find(".no-goals").length == 1) {
         if ($("#goal-text").find(".no-goals").text() == 'No more goals.') {
           _.closeUnshelved();
-          _.insertTacTree(_.diff.text(0, _.diff.IndentRelativeTo.vernac, 'Qed.'), true);
+          _.insertTacTree(_.diff.line(0, _.diff.IndentRelativeTo.vernac, 'Qed.'), true);
         } else if ($("#goal-text").find(".no-goals").text() == 'All the remaining goals are on the shelf.') {
           var goalInfo = globalLastGoalInfo;
           console.log('SHELF:', 'All the remaining goals are on the shelf.', goalInfo);
@@ -816,20 +963,13 @@ var prouf = (function(waitJsCoqLoaded) {
               if (shelfNamed.length > 0) {
                 _.insertTacTree(shelfNamed.map((name, idx) =>
                   _.diff.concat(
-                    (idx == 0) ? _.diff.empty() : _.diff.newLine(),
-                    _.diff.text(0, 'vernac', '[' + name + ']:{'),
-                    (idx == 0) ? _.diff.cursor() : _.diff.empty(),
-                    _.diff.text(0, 'vernac', '}')
+                    _.diff.line(0, [
+                      _.diff.lineElement.text('vernac', '[' + name + ']:{'),
+                      (idx == 0) ? _.diff.lineElement.cursor() : _.diff.empty()
+                    ]),
+                    _.diff.line(0, 'vernac', '}')
                   )
                 ).flat());
-                /*_.insertTactic(_indentation => 
-                  shelfNamed.map((name, idx) => [
-                    (idx == 0) ? '' : '\n',
-                    '[' + name + ']:{\n',
-                    (idx == 0) ? _.CURSOR : '',
-                    '}'
-                  ]).flat()
-                );*/
               }
             }
           }
@@ -858,7 +998,7 @@ var prouf = (function(waitJsCoqLoaded) {
                 break;
               }
             }
-            _.insertTacTree(_.diff.concat(_.diff.bullet(bullet), _.diff.text(0, _.diff.IndentRelativeTo.ltac, originator)), true);
+            _.insertTacTree(_.diff.bullet(bullet, _.diff.line(0, _.diff.IndentRelativeTo.ltac, originator)), true);
           }
         }
         return true; // stop tracking this execution.
@@ -955,7 +1095,7 @@ var prouf = (function(waitJsCoqLoaded) {
 
       var bar = _.floating_toolbar(target,
         _.button('unfold', 'unfold', function() {
-          _.insertTacTree(_.diff.text(0, _.diff.IndentRelativeTo.ltac, 'unfold ' + target_text + '.'));
+          _.insertTacTree(_.diff.line(0, _.diff.IndentRelativeTo.ltac, 'unfold ' + target_text + '.'));
         }),
         _.button('case_eq', 'case_eq', async function() {
           var constructors = [];
@@ -984,43 +1124,21 @@ var prouf = (function(waitJsCoqLoaded) {
             constructors = constructors.map(c => c.join(' '));
             constructors = constructors.map(c => (c[0] == '(' && c[c.length-1] == ')') ? c.substring(1, c.length-1).trim() : c);
             _.insertTacTree(
-              _.diff.text(0, _.diff.IndentRelativeTo.ltac, 'case_eq ' + target_text + '.',
+              _.diff.line(0, _.diff.IndentRelativeTo.ltac, 'case_eq ' + target_text + '.',
                 constructors.map((c, i) =>
-                _.diff.concat(
-                  _.diff.newLine(),
                   _.diff.bullet(+1,
-                    _.diff.text(0, _.diff.IndentRelativeTo.ltac, ' when ' + c.trim() + ' as H' + target_text.trim() + '.'),
-                    $('<button class="in-code-button do-later"/>')
-                      .text('do later')
-                      .one('click', ev => {
-                        // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
-                        $(ev.target).data('prouf-bookmark').clear();
-                        _.insertTacTree(_.diff.text(0, _.diff.IndentRelativeTo.ltac, 'subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.'));
-                      }),
-                    i == 0 ? _.diff.cursor() : _.diff.empty(),
-                    _.diff.placeholder())))));
-              /*
-            _.insertTactic(indent => {
-              var bulletType = _.nextBulletType(indent.bullet);
-              var bullets = constructors.map(c => [
-                '\n' + indent.spaces + bulletType + ' when ' + c.trim() + ' as H' + target_text.trim() + '.',
-                $('<button class="in-code-button do-later"/>')
-                  .text('do later')
-                  .one('click', ev => {
-                    console.log('BUTTON CLICKED', ev);
-                    // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
-                    $(ev.target).data('prouf-bookmark').clear();
-                    _.insertTactic('subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.');
-                  })
-              ]);
-              return [].concat(
-                indent.spaces + 'case_eq ' + target_text + '.',
-                bullets[0],
-                _.CURSOR,
-                bullets.slice(1).flat()
-              );
-            });
-            */
+                    _.diff.line(0, _.diff.IndentRelativeTo.ltac, [
+                      _.diff.lineElement.text('when ' + c.trim() + ' as H' + target_text.trim() + '.'),
+                      $('<button class="in-code-button do-later"/>')
+                        .text('do later')
+                        .one('click', ev => {
+                          // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
+                          $(ev.target).data('prouf-bookmark').clear();
+                          _.insertTacTree(_.diff.line(0, _.diff.IndentRelativeTo.ltac, 'subproof ' + c.trim().split(' ')[0].toLocaleLowerCase() + '.'));
+                        }),
+                      i == 0 ? _.diff.lineElement.cursor() : _.diff.empty()
+                    ]),
+                    _.diff.placeholder()))));
           }
         }));
     });
@@ -1094,7 +1212,7 @@ var prouf = (function(waitJsCoqLoaded) {
     _.my_init2()
     _.my_init_hover_actions();
 
-    var line = parseInt(window.location.hash.substring(1)) || 93;
+    var line = parseInt(window.location.hash.substring(1)) || 94;
     var cm = coq.provider.snippets.find(cm => {
       var first = cm.editor.options.firstLineNumber;
       return first <= line && first + cm.editor.lastLine() >= line;
