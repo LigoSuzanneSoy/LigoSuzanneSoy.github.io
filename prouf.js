@@ -624,7 +624,7 @@ var prouf = (function(waitJsCoqLoaded) {
       ii++;
     }
     if (jj < t_heading.length && t_heading[jj].type == 'text') {
-      t_aligned.push({ type: 'text', text: e_heading[jj].text.substring(tstart) });
+      t_aligned.push({ type: 'text', text: t_heading[jj].text.substring(tstart) });
       jj++;
     }
     while (ii < e_heading.length) { e_aligned.push(e_heading[ii++]); }
@@ -637,6 +637,12 @@ var prouf = (function(waitJsCoqLoaded) {
     var e_heading = [ {type: 'text', text: "str" }, { type: 'cursor' }, {type: 'text', text: "STR" }, {type: 'text', text: "abc" }, {type: 'text', text: "def" } ];
     var t_heading = [ {type: 'text', text: "strST" }, { type: 'cursor' }, {type: 'text', text: "Rabc" }, {type: 'text', text: "d" } ];
     console.log(_.align_headings(e_heading, t_heading));
+  };
+
+  _.spaces = function(n) {
+    var str = '';
+    for (var i = 0; i < n; i++) { str += ' '; }
+    return str;
   };
 
   _.insertTacTree = function(tacs, recursion) {
@@ -654,7 +660,6 @@ var prouf = (function(waitJsCoqLoaded) {
         addedNewLine = true;
       }
     }
-    var pos = { line: pos_orig.line, ch: pos_orig.ch };
 
     // TODO: get the entire tree for the code block; as we may need to insert tactics that de-indent.
     var existingBulletSubtree = prouf.getBulletTree(l => cmdoc.getLine(l), pos_orig.line, cmdoc.lineCount() - pos_orig.line);
@@ -664,6 +669,15 @@ var prouf = (function(waitJsCoqLoaded) {
     var pos = existingBulletSubtree.children[0].range.start;
     var printpos = (pos) =>
       JSON.stringify(pos) + '"'+cmdoc.getLine(pos.line).substring(0, pos.ch)+'|'+cmdoc.getLine(pos.line).substring(pos.ch);
+    
+    var todoBookmark =
+      (h, pos) =>
+        () => h.data('prouf-bookmark',
+          cmdoc.setBookmark(pos, {insertLeft: pos.ch == cmdoc.getLine(pos.line).length, widget:h[0]}));
+    
+    var todoSetCursor =
+      (pos) =>
+        () => cmdoc.setCursor(pos);
 
     var recur = function(exis, tacs, state) {
       for (var i = 0, j = 0; j < tacs.length; i++, j++) {
@@ -702,15 +716,15 @@ var prouf = (function(waitJsCoqLoaded) {
             throw { patchFailed: 'no line vs. line', a: exis[i], b: tacs[j] };
           } else {
             pos = exis[i].range.start;
-            var { e_aligned, t_aligned } = _.align_headings(exis[i].heading, tacs[i].heading);
+            var { e_aligned, t_aligned } = _.align_headings(exis[i].heading, tacs[j].heading);
             var ii = 0;
             var jj = 0;
             while (jj < t_aligned.length) {
               if (t_aligned[jj].type == 'text') {
-                while (ii < exis[i].heading.length && exis[i].heading[ii].type != 'text') {
+                while (ii < e_aligned.length && e_aligned[ii].type != 'text') {
                   ii++; // skip over non-text content
                 }
-                if (ii >= exis[i].heading.length) { throw 'unexpected case'; }
+                if (ii >= e_aligned.length) { throw { patchFailed: 'text vs end of line', a: e_aligned[ii], b: t_aligned[jj] }; }
                 // at this point, ii.type == 'text' (or exception would've been thrown)
                 if (e_aligned[ii].text != t_aligned[jj].text) {
                   throw { patchFailed: 'different texts', a: e_aligned[ii].text, b: t_aligned[jj].text };
@@ -720,18 +734,16 @@ var prouf = (function(waitJsCoqLoaded) {
               } else if (t_aligned[jj].type == 'cursor') {
                 todos.push([
                   'set cursor position to ' + printpos(pos) +'"',
-                  ((pos) =>
-                    () => cmdoc.setCursor(pos)
-                  )(pos)
+                  todoSetCursor(pos)
                 ]);
               } else if (t_aligned[jj] instanceof $) {
                 todos.push([
                   'insert the button ' + t_aligned[jj] + ' at ' + printpos(pos)+'"',
-                  ((t_aligned, jj, pos) =>
-                    () => t_aligned[jj].data('prouf-bookmark',
-                      cmdoc.setBookmark(pos, {insertLeft: pos.ch == cmdoc.getLine(pos.line).length, widget:t_aligned[jj][0]}))
-                  )(t_aligned, jj, pos)
+                  todoBookmark(t_aligned[jj], pos)
                 ]);
+              } else {
+                debugger;
+                throw "unknown diff AST case";
               }
               jj++;
             }
@@ -751,28 +763,85 @@ var prouf = (function(waitJsCoqLoaded) {
       }
     };
 
-    console.log(existingBulletSubtree);
+    var tryMergeTree = function() {
+      try {
+        recur(existingBulletSubtree.children, tacs, {
+          bullet: 0,
+          indentLtac: 0,
+          indentVernac: 0,
+        });
+        return true;
+      } catch (e) {
+        if (e.patchFailed) {
+          console.log(e);
+          return false;
+        } else {
+          throw e;
+        }
+      }
+    };
 
-    try {
-      recur(existingBulletSubtree.children, tacs, {
-        bullet: 0,
+    var posNew = { line: pos_orig.line, ch: pos_orig.ch };
+    var recurNew = function(tacs, state) {
+      for (var i = 0, j = 0; j < tacs.length; i++, j++) {
+        if (tacs[j].type == 'placeholder') {
+          // nothing to do.
+        } else if (tacs[j].type == 'empty') {
+          console.warn('"empty" in semantic diff AST, should not happen. Skipping.');
+        } else if (tacs[j].type == 'bullet') {
+          var newBullet = state.bullet + tacs[j].relativeType;
+          var txt = state.indentLtac + prouf.bulletTypes[newBullet] + ' ';
+          cmdoc.replaceRange(txt, posNew);
+          posNew.ch += txt.length;
+          var newState = {
+            bullet: newBullet,
+            indentLtac: state.indentLtac + prouf.bulletTypes[newBullet].length, // TODO
+            indentVernac: state.indentVernac
+          }
+          recurNew(tacs[j].children, newState);
+        } else if (tacs[j].type == 'line') {
+          for (var jj = 0; jj < tacs[j].heading.length; jj++) {
+            var h = tacs[j].heading[jj];
+            if (h.type == 'text') {
+              cmdoc.replaceRange(h.text, posNew);
+              posNew.ch += h.text.length;
+            } else if (h.type == 'cursor') {
+              todoSetCursor(posNew)();
+            } else if (h instanceof $) {
+              todoBookmark(h, posNew)();
+            } else {
+              debugger;
+              throw "unknown diff AST case";
+            }
+          }
+          cmdoc.replaceRange('\n', posNew);
+          posNew.line++;
+          posNew.ch = 0;
+          var newState = {
+            bullet: state.bullet,
+            indentLtac: state.indentLtac,
+            indentVernac: state.indentVernac,
+          }
+          recurNew(tacs[j].children, newState);
+        }
+      }
+    };
+
+    var newTree = function() {
+      recurNew(tacs, {
+        bullet: 0, // TODO
         indentLtac: 0,
         indentVernac: 0,
       });
-    } catch (e) {
-      if (e.patchFailed) {
-        console.log(e);
-        return false;
-      } else {
-        throw e;
-      }
-    }
-
-    console.log(todos.reverse().map(x => x[0]));
+    };
     
-    cmdoc.getEditor().operation(() => todos.reverse().forEach(x => x[1]()));
+    if (tryMergeTree()) {
+      cmdoc.getEditor().operation(() => todos.reverse().forEach(x => x[1]()));
+    } else {
+      cmdoc.getEditor().operation(() => newTree());
+    }
     coq.goCursor();
-  }
+  };
 
   _.insertTactic = function(tacs, recursion) {
     var cmdoc = coq.provider.currentFocus.editor.getDoc();
