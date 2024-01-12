@@ -790,7 +790,7 @@ var prouf = (function(waitJsCoqLoaded) {
           console.warn('"empty" in semantic diff AST, should not happen. Skipping.');
         } else if (tacs[j].type == 'bullet') {
           var newBullet = state.bullet + tacs[j].relativeType;
-          var txt = state.indentLtac + prouf.bulletTypes[newBullet] + ' ';
+          var txt = _.spaces(state.indentLtac) + prouf.bulletTypes[newBullet] + ' ';
           cmdoc.replaceRange(txt, posNew);
           posNew.ch += txt.length;
           var newState = {
@@ -806,9 +806,9 @@ var prouf = (function(waitJsCoqLoaded) {
               cmdoc.replaceRange(h.text, posNew);
               posNew.ch += h.text.length;
             } else if (h.type == 'cursor') {
-              todoSetCursor(posNew)();
+              todos.push(['', todoSetCursor({line: posNew.line, ch: posNew.ch})]);
             } else if (h instanceof $) {
-              todoBookmark(h, posNew)();
+              todos.push(['', todoBookmark(h, {line: posNew.line, ch: posNew.ch})]);
             } else {
               debugger;
               throw "unknown diff AST case";
@@ -835,11 +835,11 @@ var prouf = (function(waitJsCoqLoaded) {
       });
     };
     
-    if (tryMergeTree()) {
-      cmdoc.getEditor().operation(() => todos.reverse().forEach(x => x[1]()));
-    } else {
+    if (!tryMergeTree()) {
+      todos = [];
       cmdoc.getEditor().operation(() => newTree());
     }
+    cmdoc.getEditor().operation(() => todos.reverse().forEach(x => x[1]()));
     coq.goCursor();
   };
 
