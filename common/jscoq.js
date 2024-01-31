@@ -5,8 +5,10 @@
  */
 
 function jsCoqInject() {
-    $(document.body).attr('id', 'ide-wrapper').addClass('toggled')
-        .addClass(isTerse() ? 'terse' : 'full')
+    $(document.body).attr('id', 'ide-wrapper')
+        .addClass('toggled')
+        .addClass('full')
+//        .addClass(isTerse() ? 'terse' : 'full')
         .append($('<link href="common/css/jscoq.css" rel="stylesheet" type="text/css"/>'))
         .append($('<div id="jscoq-plug">').on('click', jsCoqStart));
 }
@@ -77,11 +79,13 @@ function jsCoqStart() {
     waitJsCoqLoaded.then(function() { coq.layout.show(); });
 }
 
-function isTerse() {
-    return $('[src$="/slides.js"]').length > 0;
-}
+//function isTerse() {
+//    return $('[src$="/slides.js"]').length > 0;
+//}
 
+/*
 if (location.search !== '?jscoq=no') {
     jsCoqInject();
     window.addEventListener('DOMContentLoaded', jsCoqLoad);
 }
+*/

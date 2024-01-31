@@ -85,7 +85,7 @@ var prouf = (function(waitJsCoqLoaded) {
   // We'll write all functions and variables global to this package in here.
   var _ = { };
   var prouf = _;
-  var $ = null; // jQuery instance, set by _.init();
+  var $ = $; // jsCoq's jQuery instance, overwritten by _.init();
   var coq = null; // coq instance, set by _.init();
 
   _.extendJQuery = function($) {
@@ -665,6 +665,8 @@ var prouf = (function(waitJsCoqLoaded) {
     var existingBulletSubtree = prouf.getBulletTree(l => cmdoc.getLine(l), pos_orig.line, cmdoc.lineCount() - pos_orig.line);
     console.log('INSERTTACTREE', tacs, existingBulletSubtree);
 
+    var indentationOrig = _.getIndentation(cmdoc, pos_orig.line, true);
+
     var todos = [];
     var pos = existingBulletSubtree.children[0].range.start;
     var printpos = (pos) =>
@@ -707,7 +709,11 @@ var prouf = (function(waitJsCoqLoaded) {
             ((exis, i) =>
               () => console.log(exis, i) || cmdoc.findMarks(exis[i].range.start, { line: exis[i].range.end.line+1, ch:0 }).forEach((mark) => {
                 console.log(mark);
-                if (mark.className && mark.className.startsWith('prouf-')) { mark.clear(); }
+                if (mark.className && mark.className.startsWith('prouf-')) {
+                  var foundMark = mark.find();
+                  var offMark = cmdoc.markText(foundMark.from, foundMark.to, {className: mark.className + '-off'});
+                  window.setTimeout( ((m, o) => () => { m.clear(); o.clear(); })(mark, offMark) , 1000);
+                }
                 if (mark.replacedWith && $(mark.replacedWith).data('prouf-bookmark')) { $(mark.replacedWith).remove() && mark.clear(); }
               })
             )(exis, i)
@@ -765,11 +771,19 @@ var prouf = (function(waitJsCoqLoaded) {
 
     var tryMergeTree = function() {
       try {
+        var posStart = {line:pos.line, ch:pos.ch};
+
         recur(existingBulletSubtree.children, tacs, {
-          bullet: 0,
-          indentLtac: 0,
+          bullet: _.bulletTypes.indexOf(indentationOrig.bullet), // TODO
+          indentLtac: indentationOrig.spaces.length,
           indentVernac: 0,
         });
+
+        var posEnd = {line:pos.line, ch:pos.ch};
+        todos.splice(0, 0, [
+          'markRange' + printpos(posStart) + ',' + printpos(posEnd),
+          markRange(posStart, posEnd)
+        ]);
         return true;
       } catch (e) {
         if (e.patchFailed) {
@@ -803,8 +817,9 @@ var prouf = (function(waitJsCoqLoaded) {
           for (var jj = 0; jj < tacs[j].heading.length; jj++) {
             var h = tacs[j].heading[jj];
             if (h.type == 'text') {
-              cmdoc.replaceRange(h.text, posNew);
-              posNew.ch += h.text.length;
+              var txt = (posNew.ch == 0 ? _.spaces(state.indentLtac) : '') + h.text
+              cmdoc.replaceRange(txt, posNew);
+              posNew.ch += txt.length;
             } else if (h.type == 'cursor') {
               todos.push(['', todoSetCursor({line: posNew.line, ch: posNew.ch})]);
             } else if (h instanceof $) {
@@ -828,22 +843,53 @@ var prouf = (function(waitJsCoqLoaded) {
     };
 
     var newTree = function() {
+      var posStart = {line:posNew.line, ch:posNew.ch};
+
       recurNew(tacs, {
-        bullet: 0, // TODO
-        indentLtac: 0,
+        bullet: _.bulletTypes.indexOf(indentationOrig.bullet), // TODO
+        indentLtac: indentationOrig.spaces.length,
         indentVernac: 0,
       });
+
+      var posEnd = {line:posNew.line, ch:posNew.line};
+      todos.splice(0, 0, [
+        'markRange' + printpos(posStart) + ',' + printpos(posEnd),
+        markRange(posStart, posEnd)
+      ]);
     };
+
+    var rangeMark = null;
+    var markRange = (from, to) => () => { rangeMark = cmdoc.markText(from, to, { inclusiveLeft: true, inclusiveRight: true }); };
     
     if (!tryMergeTree()) {
       todos = [];
       cmdoc.getEditor().operation(() => newTree());
     }
     cmdoc.getEditor().operation(() => todos.reverse().forEach(x => x[1]()));
+    if (!recursion) {
+      var range = rangeMark.find();
+      var text = cmdoc.getRange(range.from, range.to);
+      _.insertTacticCallback = _.theInsertTacticCallback({
+        doc: cmdoc,
+        text: text,
+        //pos_orig: pos_orig,
+        rangeMark: rangeMark,
+        //c_start: pos_orig,
+        //text: text,
+        //c_middle: c_middle,
+        //c_end: c_end,
+        addedNewLine: addedNewLine
+      });
+    }
     coq.goCursor();
   };
 
-  _.insertTactic = function(tacs, recursion) {
+  _.insertTactic = (txt) => _.insertTacTree(_.diff.line(0, _.diff.IndentRelativeTo.ltac, [
+    _.diff.lineElement.text(txt),
+    _.diff.lineElement.cursor(),
+  ]));
+
+  _.insertTacticOld = function(tacs, recursion) {
     var cmdoc = coq.provider.currentFocus.editor.getDoc();
     //var orig_c = cmdoc.getCursor();
     var orig_c = coq.doc.sentences.last().end;
@@ -947,29 +993,45 @@ var prouf = (function(waitJsCoqLoaded) {
   };
 
   _.undoInsertTactic = function(inserted, errtext, errelt) {
-    var c_end = { line: inserted.c_end.line, ch: inserted.c_end.ch + inserted.text.length + 3 /* for the '(* ' inserted */ };
-    inserted.doc.replaceRange('(* ', inserted.c_start);
-    inserted.doc.replaceRange(' *)', c_end);
+    console.log('UNDO', inserted);
+
+    var range = inserted.rangeMark.find();
+    var marks = inserted.doc.findMarks(range.from, range.to, null, { inclusiveLeft: true, inclusiveRight: true });
+
+    // Todo: operation
+    for (var mark of marks) {
+      if (mark != inserted.rangeMark) {
+        mark.clear();
+      }
+    }
+    inserted.doc.replaceRange(' *)', range.to);
+    inserted.doc.replaceRange('(* ', range.from);
+
+    range = inserted.rangeMark.find();
+
     var msg = $('<div class="insertTacticFailed"></div>');
-    msg.append(errelt.clone());
-    var msgwidget = inserted.doc.getEditor().addLineWidget(inserted.c_end.line, msg[0], {coverGutter: false, noHScroll: false});
-    var bookmark = null;
+    if (errelt) { msg.append(errelt.clone()); }
+    var msgwidget = inserted.doc.getEditor().addLineWidget(range.to.line, msg[0], {coverGutter: false, noHScroll: false});
+
+    var rmBookmark = null;
     var rm = $('<button class="in-code-button in-code-button-remove">× remove</button>');
     rm.on('click', function(ev) {
       msgwidget.clear();
       // TODO: use $(ev.target).data('prouf-bookmark'), but make sure the target can't be a descendent
-      bookmark.clear();
-      var c_rm_end = {line:c_end.line, ch:c_end.ch+3};
+      rmBookmark.clear();
+      var range = inserted.rangeMark.find();
       // check that we're removing what we think we're removing!
       console.log('<'+'(* ' + inserted.text + ' *)'+'>');
-      console.log('<'+inserted.doc.getRange(inserted.c_start, c_end)+'>');
-      if ('(* ' + inserted.text + ' *)' == inserted.doc.getRange(inserted.c_start, c_end)) {
+      console.log('<'+inserted.doc.getRange(range.from, range.to)+'>');
+      if ('(* ' + inserted.text + ' *)' == inserted.doc.getRange(range.from, range.to)) {
+        var end = range.to;
         if (inserted.addedNewLine) {
-          c_rm_end.line++;
-          c_rm_end.ch = 0;
+          end = inserted.doc.posFromIndex(inserted.doc.indexFromPos(end)+1);
         }
-        inserted.doc.replaceRange('', inserted.c_start, c_rm_end);
-        inserted.doc.setCursor(inserted.c_start);
+        // TODO: operation
+        inserted.doc.replaceRange('', range.from, end);
+        inserted.doc.setCursor(range.from);
+      
         coq.goCursor();
         // Quick & dirty hack around the problems with jsCoq cancelling the last sentence when the cursor is exactly on it
         // + not updating the sentence's end position even if the comments after it have changed.
@@ -978,11 +1040,10 @@ var prouf = (function(waitJsCoqLoaded) {
         //coq.goCursor();
       }
     });
-    //inserted.doc.getEditor().addWidget({line:c_end.line, ch:c_end.ch+3}, rm[0], true);
-    bookmark = inserted.doc.setBookmark({line:c_end.line, ch:c_end.ch+3}, {widget:rm[0]})
-    rm.data('prouf-bookmark', bookmark);
+    rmBookmark = inserted.doc.setBookmark(range.to, {widget:rm[0]});
+    rm.data('prouf-bookmark', rmBookmark);
 
-    inserted.doc.setCursor(c_end);
+    inserted.doc.setCursor(range.to);
     coq.goCursor();
   }
 
@@ -1001,11 +1062,11 @@ var prouf = (function(waitJsCoqLoaded) {
   };
 
   _.theInsertTacticCallback = function(inserted) {
-    var trackingError = null;
+    //var trackingError = null;
 
     return function(msg) {
       console.log('===========================================', msg)
-      if (trackingError) {
+      /*if (trackingError) {
         var e = $('#query-panel .Error[data-coq-sid="' + trackingError + '"]');
         if (e.length == 1) {
           var errmsg = $('#query-panel .Error[data-coq-sid="' + trackingError + '"]');
@@ -1015,12 +1076,14 @@ var prouf = (function(waitJsCoqLoaded) {
         } else if (msg.data[0] == 'Feedback' && msg.data[1].contents && msg.data[1].contents == 'Processed') {
           _.undoInsertTactic(inserted);
           return true;
+        } else {
+          // continue with other cases
         }
-      }
+      }*/
       if ($("#goal-text").find(".no-goals").length == 1) {
         if ($("#goal-text").find(".no-goals").text() == 'No more goals.') {
           _.closeUnshelved();
-          _.insertTacTree(_.diff.line(0, _.diff.IndentRelativeTo.vernac, 'Qed.'), true);
+          _.insertTacTree(_.diff.line(0, _.diff.IndentRelativeTo.vernac, [_.diff.lineElement.text('Qed.'), _.diff.lineElement.cursor()]), true);
         } else if ($("#goal-text").find(".no-goals").text() == 'All the remaining goals are on the shelf.') {
           var goalInfo = globalLastGoalInfo;
           console.log('SHELF:', 'All the remaining goals are on the shelf.', goalInfo);
@@ -1072,8 +1135,11 @@ var prouf = (function(waitJsCoqLoaded) {
         }
         return true; // stop tracking this execution.
       } else if (msg.data[0] == 'CoqExn') {
-        trackingError = msg.data[2][1];
-        return false; // need to wait for the next "processed" for the message to be formatted
+        //trackingError = msg.data[2][1];
+        var errmsg = $(new FormatPrettyPrint().pp2DOM(msg.data[3]).toArray());
+        console.log(errmsg);
+        _.undoInsertTactic(inserted, errmsg.text(), errmsg);
+        return true; // stop tracking this execution.
       }
     }
   };
@@ -1269,6 +1335,8 @@ var prouf = (function(waitJsCoqLoaded) {
   _.init = async function() {
     if (_.initialized.isResolved) { return; }
 
+    jsCoqLoad(); // TODO: make this an await, if possible.
+
     // Wait for jsCoq to be loaded and save the instance
     var {coq:jsCoqInstance, $:jQuery} = await waitJsCoqLoaded;
     coq = jsCoqInstance;
@@ -1278,6 +1346,20 @@ var prouf = (function(waitJsCoqLoaded) {
     _.my_init();
 
     await _.waitJsCoqReady;
+
+    for (var e = 0; e < coq.provider.snippets.length; e++) {
+      ((cmdoc) =>
+      cmdoc.operation(() => {
+        for (var i = 0; i < cmdoc.lineCount(); i++) {
+          var l = cmdoc.getLine(i);
+          if (l.endsWith('(**)')) {
+            cmdoc.replaceRange('', { line: i, ch: l.length-4 }, {line: i, ch: l.length});
+            cmdoc.markText({line:i, ch: 0}, {line: i, ch: l.length-4}, {className: "prouf-placeholder"});
+          }
+        }
+      }))(coq.provider.snippets[e].editor);
+    }
+
     _.my_init2()
     _.my_init_hover_actions();
 
@@ -1479,4 +1561,9 @@ var prouf = (function(waitJsCoqLoaded) {
   return _;
 })(waitJsCoqLoaded);
 
-/* await */ prouf.init();
+///* await */ prouf.init();
+
+if (location.search !== '?jscoq=no') {
+  jsCoqInject();
+  window.addEventListener('DOMContentLoaded', prouf.init);
+}
