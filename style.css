@@ -15,6 +15,7 @@ html.dark {
   --tuto-pre-background: #111;
   --tuto-pre-border: #333;
   --tuto-hr: #555;
+  --tuto-blockquote-border: #444;
   --tuto-blockquote-bg: #0f0f0f;
   --tuto-varblock-border: #888;
   --tuto-coq-eval-ok-bg: #14421f;
@@ -41,6 +42,7 @@ html, html.light {
   --tuto-pre-background: #eee;
   --tuto-pre-border: #ccc;
   --tuto-hr: #aaa;
+  --tuto-blockquote-border: #bbb;
   --tuto-blockquote-bg: #f0f0f0;
   --tuto-varblock-border: #888;
   --tuto-coq-eval-ok-bg: #bef0be;
@@ -70,6 +72,7 @@ html, html.light {
     --tuto-pre-background: #111;
     --tuto-pre-border: #333;
     --tuto-hr: #555;
+    --tuto-blockquote-border: #444;
     --tuto-blockquote-bg: #0f0f0f;
     --tuto-varblock-border: #888;
     --tuto-coq-eval-ok-bg: #14421f;
@@ -98,6 +101,7 @@ html, html.light {
     --tuto-pre-background: #eee;
     --tuto-pre-border: #ccc;
     --tuto-hr: #aaa;
+    --tuto-blockquote-border: #bbb;
     --tuto-blockquote-bg: #f0f0f0;
     --tuto-varblock-border: #888;
     --tuto-coq-eval-ok-bg: #bef0be;
