@@ -864,9 +864,9 @@ Definition u_max (a : nat) (p : param) :=
   end.
 
 (*
-Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim ] (Bid 0).
-Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ] (Bid 0).
-Compute fold_left u_max (valid_ops Available [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ]) (Bid 0).
+Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim ] 0.
+Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ] 0.
+Compute fold_left u_max (valid_ops Available [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ]) 0.
 *)
 
 Lemma fold_get_bids :
