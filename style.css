@@ -15,8 +15,7 @@ html.dark {
   --tuto-pre-background: #111;
   --tuto-pre-border: #333;
   --tuto-hr: #555;
-  --tuto-blockquote: #333;
-  --tuto-blockquote-background: #0f0f0f;
+  --tuto-blockquote-bg: #0f0f0f;
   --tuto-varblock-border: #888;
   --tuto-coq-eval-ok-bg: #14421f;
   --tuto-coq-eval-pending-bg: #534912;
@@ -42,8 +41,7 @@ html, html.light {
   --tuto-pre-background: #eee;
   --tuto-pre-border: #ccc;
   --tuto-hr: #aaa;
-  --tuto-blockquote: #ccc;
-  --tuto-blockquote-background: #f0f0f0;
+  --tuto-blockquote-bg: #f0f0f0;
   --tuto-varblock-border: #888;
   --tuto-coq-eval-ok-bg: #bef0be;
   --tuto-coq-eval-pending-bg: #bebef0;
@@ -72,8 +70,7 @@ html, html.light {
     --tuto-pre-background: #111;
     --tuto-pre-border: #333;
     --tuto-hr: #555;
-    --tuto-blockquote: #333;
-    --tuto-blockquote-background: #0f0f0f;
+    --tuto-blockquote-bg: #0f0f0f;
     --tuto-varblock-border: #888;
     --tuto-coq-eval-ok-bg: #14421f;
     --tuto-coq-eval-pending-bg: #534912;
@@ -101,8 +98,7 @@ html, html.light {
     --tuto-pre-background: #eee;
     --tuto-pre-border: #ccc;
     --tuto-hr: #aaa;
-    --tuto-blockquote: #ccc;
-    --tuto-blockquote-background: #f0f0f0;
+    --tuto-blockquote-bg: #f0f0f0;
     --tuto-varblock-border: #888;
     --tuto-coq-eval-ok-bg: #bef0be;
     --tuto-coq-eval-pending-bg: #bebef0;
@@ -224,9 +220,9 @@ hr {
  * https://github.com/tetue/tinytypo/blob/5f7411746c8c4d634ac8cd14c730b86f4ffd1813/css/typo.css#L397
  */
 blockquote {
-  border-left: 0.85ex solid var(--tuto-blockquote);
+  border-left: 0.85ex solid var(--tuto-blockquote-border);
   padding: 0.8ex 1ex;
-  background: var(--tuto-blockquote-background);
+  background: var(--tuto-blockquote-bg);
   margin: 1em 2em;
 }
 
@@ -715,4 +711,12 @@ details summary::after {
 
 details[open] summary::after {
   display: none;
+}
+
+.important-note {
+  border: thick solid var(--tuto-blockquote-border);
+  border-radius: 1em;
+  margin:1em;
+  padding: 1em;
+  background-color: var(--tuto-blockquote-bg);
 }

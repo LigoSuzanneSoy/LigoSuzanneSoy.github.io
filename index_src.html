@@ -59,7 +59,13 @@
       <pre class="code" id="snippet-contract-type-storage">
       </pre>
 
-      To run the code above, click to place the cursor after period marking the end of a Coq sentence, and press <kbd>Alt</kbd>+<kbd>Right</kbd>.
+      <div class="important-note">
+        <p>To run the code above, click to place the cursor after period marking the end of a Coq sentence,
+        and press <kbd>Alt</kbd>+<kbd>Right</kbd>.</p>
+        
+        <p>In order to see the proof state, click the <img onclick="jsCoqStart();" style="height: 5ex; margin-bottom: -1.5ex;" src="jscoq-plug-icon.png"/> icon in the top
+          right.</p>
+      </div>
 
       <details class="toggle hidden">
         <summary>type: metadata</summary>
@@ -689,7 +695,7 @@ Qed.
       Extracting the code:
       <pre class="code" id="snippet-extract-extraction">
       </pre>
-      <button onclick="prouf.get_file_string('/home/contract.1.ocaml.ml', prouf.cmExtracted.setValue)">▶️ Extract</button>
+      <button onclick="prouf.get_file_string('/home/contract.1.ocaml.ml', (f,v) => prouf.cmExtracted.setValue(v))">▶️ Extract</button>
       <textarea readonly="true" id="extracted">
         (* Extracted code will appear here *)
       </textarea>
@@ -710,7 +716,7 @@ Qed.
 
       Furthermore, the <code>build.sh</code> script performs these checks:
       
-      <blockquote>
+      <div class="important-note">
         <p>For each <code>Definition spec_<em>XYZ</em> := …</code> in <code>specification.v</code>,
         it checks that there is a <code>proof_<em>XYZ</em></code> file containing the proof
         <code>Theorem unit_test_XYZ : spec_XYZ. <em>[...]</em> Qed.</code></li>.</p>
@@ -730,7 +736,7 @@ Qed.
           <em style="color:darkgreen">all-green</em> when writing conventional unit tests. <em>It is
             worth noting that it is not necessary to read the proofs, as they are automatically
             checked.</em></p>
-      </blockquote>
+      </div>
       </section>
       <section>
         <h1>Further reading</h1>

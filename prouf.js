@@ -1372,7 +1372,7 @@ var prouf = (function(waitJsCoqLoaded) {
     var hash_prefix='#chapter-1-line-';
     var line = parseInt(window.location.hash.substring(hash_prefix.length));
     var gotoLine = !!line;
-    line = line || 0;
+    line = line || 1;
     var cm = coq.provider.snippets.find(cm => {
       var first = cm.editor.options.firstLineNumber;
       return first <= line && first + cm.editor.lastLine() >= line;

@@ -64,7 +64,13 @@ Inductive storage :=
 | Sold       : nat -&gt; storage.
 </pre>
 
-      To run the code above, click to place the cursor after period marking the end of a Coq sentence, and press <kbd>Alt</kbd>+<kbd>Right</kbd>.
+      <div class="important-note">
+        <p>To run the code above, click to place the cursor after period marking the end of a Coq sentence,
+        and press <kbd>Alt</kbd>+<kbd>Right</kbd>.</p>
+        
+        <p>In order to see the proof state, click the <img onclick="jsCoqStart();" style="height: 5ex; margin-bottom: -1.5ex;" src="jscoq-plug-icon.png"/> icon in the top
+          right.</p>
+      </div>
 
       <details class="toggle hidden">
         <summary>type: metadata</summary>
@@ -518,25 +524,25 @@ Qed.
       So, here it is, the signature of the induction principle over blockchain transactions :
       <pre class="code" id="snippet-lemma_fold_invariant_aux-theorem-signature">
 Theorem fold_invariant_aux :
-  forall {state         : Type}                           (* The type of the contract storage, for us its 'storage_state' *)
+  forall {state         : Type}                                (* The type of the contract storage, for us its 'storage_state' *)
          {aux           : Type}                           (* The type of the auxiliaty cross-transaction data *)
          (initial_value : state)                          (* Value of the storage before the first transaction *)
          (initial_aux   : aux)                            (* Same as above for auxiliary data *)
          {arg           : Type}                           (* Type of a transaction, for us its 'param' *)
-         (f             : state -&gt; arg -&gt; state)          (* The code of the contract's main function, 'main_option' *)
-         (g             : aux -&gt; arg -&gt; aux)              (* Function describing what to do with aux data during a transaction *)
+         (f             : state -&gt; arg -&gt; state)              (* The code of the contract's main function, 'main_option' *)
+         (g             : aux -&gt; arg -&gt; aux)                  (* Function describing what to do with aux data during a transaction *)
          (l             : list arg)                       (* The list of blockchain transactions *)
-         (valid         : state -&gt; arg -&gt; bool)           (* The predicate saying when a transaction is valid or not *)
+         (valid         : state -&gt; arg -&gt; bool)               (* The predicate saying when a transaction is valid or not *)
          (filter_valid
              := filter_args valid f initial_value)
-         (P             : state -&gt; aux -&gt; Prop)           (* The over-all-transaction property we want to prove *)
+         (P             : state -&gt; aux -&gt; Prop)                  (* The over-all-transaction property we want to prove *)
 
          (Invalid_is_noop :                               (* A proof that invalid transactions lead to no change of state *)
            forall state arg,
              valid state arg = false -&gt;
              f state arg = state)
 
-         (Hind : forall xarg xstate xaux,                 (* A proof that P is preserved over one call to the contract *)
+         (Hind : forall xarg xstate xaux,                      (* A proof that P is preserved over one call to the contract *)
                    P xstate xaux -&gt;
                    (*In xarg l -&gt;*)
                    valid xstate xarg = true -&gt;
@@ -1332,7 +1338,7 @@ destination_account  : contract unit
 (* Compile Coq code to OCaml *)
 Extraction &quot;contract.1.ocaml.ml&quot; main.
 </pre>
-      <button onclick="prouf.get_file_string('/home/contract.1.ocaml.ml', prouf.cmExtracted.setValue)">▶️ Extract</button>
+      <button onclick="prouf.get_file_string('/home/contract.1.ocaml.ml', (f,v) => prouf.cmExtracted.setValue(v))">▶️ Extract</button>
       <textarea readonly="true" id="extracted">
         (* Extracted code will appear here *)
       </textarea>
@@ -1353,7 +1359,7 @@ Extraction &quot;contract.1.ocaml.ml&quot; main.
 
       Furthermore, the <code>build.sh</code> script performs these checks:
       
-      <blockquote>
+      <div class="important-note">
         <p>For each <code>Definition spec_<em>XYZ</em> := …</code> in <code>specification.v</code>,
         it checks that there is a <code>proof_<em>XYZ</em></code> file containing the proof
         <code>Theorem unit_test_XYZ : spec_XYZ. <em>[...]</em> Qed.</code></li>.</p>
@@ -1373,7 +1379,7 @@ Extraction &quot;contract.1.ocaml.ml&quot; main.
           <em style="color:darkgreen">all-green</em> when writing conventional unit tests. <em>It is
             worth noting that it is not necessary to read the proofs, as they are automatically
             checked.</em></p>
-      </blockquote>
+      </div>
       </section>
       <section>
         <h1>Further reading</h1>
