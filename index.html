@@ -857,17 +857,17 @@ Fixpoint max_bid (s : storage) (l : list param) :=
   | hd :: tl =&gt; max_bid s tl
   end.
 
-(*
-Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim ] initial_max.
-Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ] initial_max.
-Compute fold_left u_max (valid_ops Available [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ]) initial_max.
-*)
-
 Definition u_max (a : nat) (p : param) :=
   match p with
   | Bid n =&gt; max n a
   | Claim =&gt; a
   end.
+
+(*
+Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim ] (Bid 0).
+Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ] (Bid 0).
+Compute fold_left u_max (valid_ops Available [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ]) (Bid 0).
+*)
 
 Lemma fold_get_bids :
   forall l z,
