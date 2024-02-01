@@ -14,6 +14,7 @@
   <link rel="stylesheet" type="text/css" href="common/css/jscoq.css" />
   <link href="common/jquery-ui/jquery-ui.css" rel="stylesheet">
   <!--<script src="common/jquery-ui/jquery-ui.js"></script> Loaded after jscoq which loads its own version of jQuery-->
+  <link rel="stylesheet" type="text/css" href="kbd.css/kbd.css" />
 </head>
 <body id="ide-wrapper" class="jscoq-main jscoq-ide layout-flex">
   <script src="common/jscoq.js"></script>
@@ -62,6 +63,8 @@ Inductive storage :=
 | CurrentBid : nat -&gt; storage
 | Sold       : nat -&gt; storage.
 </pre>
+
+      To run the code above, click to place the cursor after period marking the end of a Coq sentence, and press <kbd>Alt</kbd>+<kbd>Right</kbd>.
 
       <details class="toggle hidden">
         <summary>type: metadata</summary>
@@ -174,10 +177,15 @@ Definition main (ps : param * storage) : (list operation * storage) :=
       <p>Finally, we declare what should be the initial storage of the contract when deployed.</p>
       <pre class="code" id="snippet-contract-initial-storage">
 Definition initial_storage := Available.
+
+(* ********************************************* *)
+(*                End of Contract                *)
+(* ********************************************* *)
 </pre>
 
       <details class="toggle hidden">
-        <pre class="code" id="snippet-tactics-utils">
+        <summary>Some useful syntax extensions</summary>
+        <pre class="code" id="snippet-contract-tactics-utils">
 Ltac subproof name :=
   refine ?[name]; shelve.
 
@@ -193,60 +201,38 @@ match goal with
 | |- _ = ?c -&gt; _ =&gt; check_is_ctor ctor c
 | _ =&gt; fail &quot;wrong constructor, expected&quot; ctor
 end;
-intro H.
-</pre>  
+intro H.</pre>
       </details>
-
-      <pre class="code" id="snippet-tactics-test-demo">
-Definition identity {A : Type} (x : A) := x.
-Inductive bar := A | B : nat -&gt; nat -&gt; bar | C.
-
-Goal forall y : bar, y = y.
-(* Run until here, with the GUI try to reproduce the proof below. *)
-idtac.
-intros y.
-case_eq y.(**)
-- when A as Hy.(**)
-  reflexivity.(**)
-- when B n n0 as Hy.(**)
-  case_eq n.
-  + when 0 as Hn.(**)
-    reflexivity.(**)
-  + when S n1 as Hn.(**)
-    reflexivity.(**)
-- when C as Hy.(**)
-  reflexivity.
-Qed.
-
-Goal forall x : bar, x = x.
-intros x.
-case_eq x.
-- subproof a.
-- subproof b.
-- subproof c.
-[a]:{
-  intros.
-  reflexivity.
-}
-[b]:{
-  intros.
-  reflexivity.
-}
-[c]:{
-  intros.
-  reflexivity.
-}
-Qed.
-
-Goal identity initial_storage = identity Available.
-Proof.
-
-(* ********************************************* *)
-(*                End of Contract                *)
-(* ********************************************* *)</pre>
     </section>
     <section>
       <h1>Specification</h1>
+
+      <details class="toggle hidden">
+        <summary>Utility function <code>filter_args</code></summary>
+        <pre class="code" id="snippet-filter_args">
+Require Import List.
+Import ListNotations.
+
+Fixpoint filter_args {state : Type} {arg : Type} (valid : state -&gt; arg -&gt; bool) f (s : state) (l : list arg) :=
+  match l with
+  | [] =&gt; []
+  | hd :: tl =&gt;
+    if valid s hd
+    then
+      hd :: (filter_args valid f (f s hd) tl)
+    else
+            (filter_args valid f (f s hd) tl)
+  end.</pre>
+      </details>
+      <details class="toggle hidden">
+        <summary>Import libraries</summary>
+        <pre class="code" id="snippet-specification-imports">
+Require Import Notations.
+Require Import List.
+Import ListNotations.
+Require Import Nat.
+</pre>
+      </details>
 
       <h3> Random tests vs. formal proofs </h3>
       <p>When writing a program, it is good practice to write tests.
@@ -275,26 +261,96 @@ Proof.
       Our specification will thus consist in these two properties to prove :
 
       <p>
-        <em>All bids are less than or equal to the sold-for amount.</em>
+        <em class="prouf-spec">All bids are less than or equal to the sold-for amount.</em>
 
-        <pre class="code">
+        <details class="toggle hidden">
+          <summary>Utilities for <code>spec_bids_are_less_than_sold_for_amount</code></summary>
+          <pre class="code" id="snippet-specification-utils-spec_bids_are_less_than_sold_for_amount">
+(* The object is sold for an amount greater than or equal to any (valid) bid seen so far. *)
+
+Definition main_get_storage (s : storage) (p : param) :=
+  snd (main (p, s)).
+
+Definition run_multiple_calls_ (s : storage) (l : list param) :=
+  fold_left main_get_storage l s.
+
+Definition run_multiple_calls (l : list param) :=
+  run_multiple_calls_ initial_storage l.
+
+Fixpoint contains_bid_ (has_bid : bool) (l : list param) (amount : nat) :=
+  match l with
+  | [] =&gt; False
+  | Bid a :: tl =&gt; if a =? amount then True else contains_bid_ true tl amount
+  | Claim :: tl =&gt; if has_bid then False else contains_bid_ has_bid tl amount
+  end.
+
+Definition contains_bid (l : list param) (amount : nat) :=
+   contains_bid_ false l amount.
+</pre>
+        </details>
+        <pre class="code" id="snippet-specification-spec_bids_are_less_than_sold_for_amount">
+(* If after some operations, the object is sold for an amount,
+   it will be sold for an amount &gt;= any bid.
+
+   In other words, the object is never sold for less than
+   the amount of a (valid) bid. *)
 Definition spec_bids_are_less_than_sold_for_amount :=
   forall (l : list param) (amount : nat),
     forall (Hcontains : contains_bid l amount),
-      match (run_multiple_calls l).(state) with
-      | Sold sold_for_amount => 
-          amount <= sold_for_amount
-      | _ => True
-      end.</pre>
+      match run_multiple_calls l with
+      | Sold sold_for_amount =&gt; 
+          amount &lt;= sold_for_amount
+      | _ =&gt; True
+      end.
+</pre>
       </p>
 
       <p>
-        <em>The storage is equal to the max of the bids seen so far</em>
+        <em class="prouf-spec">The storage is equal to the max of the bids seen so far</em>
 
-        <pre class="code">
+        <details class="toggle hidden">
+          <summary>Utilities for <code>spec_max</code></summary>
+          <pre class="code" id="snippet-specification-utils-spec_max">
+(* The (current or final) price of the object is the max of all the (valid) bids seen so far *)
+
+Definition valid_op (s : storage) (p : param) :=
+  match (p, s) with
+  | (Bid newAmount, Available)                 =&gt; true
+  | (Bid newAmount, CurrentBid existingAmount) =&gt; existingAmount &lt;? newAmount
+  | (Claim,         CurrentBid existingAmount) =&gt; true
+  | (_,             _storage)                  =&gt; false
+  end.
+Definition valid_ops := filter_args valid_op main_get_storage.
+Definition valid_ops' lop := valid_ops initial_storage lop.
+Fixpoint map_filter {A B} (f : A -&gt; option B) l :=
+  match l with
+  | [] =&gt; []
+  | hd :: tl =&gt; match f hd with
+                | Some x =&gt; x :: map_filter f tl
+                | None =&gt; map_filter f tl
+                end
+  end.
+Definition get_bid (p : param) :=
+  match p with
+  | Bid n =&gt; Some n
+  | Claim =&gt; None
+  end.
+Definition get_bids (l : list param) := map_filter get_bid l.
+Definition aux_max := nat.
+Definition Pmax (s : storage) (a : aux_max) : Prop :=
+  (* Pmax: the storage is equal to the max of the bids seen so far *)
+  match s with
+  | Available =&gt; a = 0
+  | CurrentBid n =&gt; n = a
+  | Sold n =&gt; n = a
+  end.
+</pre>
+        </details>
+        <pre class="code" id="snippet-specification-spec_max">
 Definition spec_max :=
   forall (l : list param),
-    Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l))).</pre>
+    Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l))).
+</pre>
       </p>
 
       <h3>Redundancy in specification</h3>
@@ -394,37 +450,127 @@ CurrentBid 8</pre>
 
       <h3>Signature of the lemma</h3>
 
+      <details class="toggle hidden">
+        <summary>Auxiliary lemmas for <code>fold_invariant_aux</code></summary>
+        <pre class="code" id="snippet-lemma_fold_invariant_aux-header">
+Require Import List.
+Import ListNotations.
+
+Lemma fold_left_cons :
+  forall (A B : Type) (f : A -&gt; B -&gt; A) (x : B) (l : list B) (i : A),
+    fold_left f (x :: l) i = fold_left f l (f i x).
+intros A B f x l i.
+fold ([x] ++ l).
+rewrite fold_left_app.
+reflexivity.
+Qed.
+
+Definition Psnd {A B BB : Type} (P : A -&gt; B -&gt; Prop) a (b : BB * B) : Prop := P a (snd b).
+
+Program Definition Psnd_rw :
+  forall A B BB (P : A -&gt; B -&gt; Prop) a (b : BB * B),
+    P a (snd b) = (Psnd P) a b := _.
+
+Definition run_if_valid {state arg aux : Type}
+                        (valid : state -&gt; arg -&gt; bool) f g (acc : state * aux) x :=
+  if valid (fst acc) x then (f (fst acc) x, g (snd acc) x) else acc.
+
+Lemma run_if_valid_rw :
+  forall {state arg aux : Type}
+         (valid : state -&gt; arg -&gt; bool)
+         f
+         g
+         l
+         (acc : state * aux)
+         initial_value
+         (initial_acc : aux)
+         (Invalid_is_noop :
+            forall state arg,
+              valid state arg = false -&gt;
+              f state arg = state),
+    fold_left g (filter_args valid f initial_value l) initial_acc
+    = snd (fold_left (run_if_valid valid f g) l (initial_value, initial_acc)).
+intros state arg aux valid f g l.
+induction l; [ compute; auto | ].
+intros acc initial_value initial_acc Invalid_is_noop.
+case_eq (valid initial_value a).
+- intros Hvalid.
+  unfold filter_args; rewrite Hvalid; fold (filter_args valid).
+  rewrite fold_left_cons.
+  rewrite fold_left_cons.
+  unfold run_if_valid at 2.
+  unfold fst.
+  unfold snd at 2.
+  rewrite Hvalid.
+  apply IHl; assumption.
+- intros Hinvalid.
+  unfold filter_args; rewrite Hinvalid; fold (filter_args valid).
+  rewrite fold_left_cons.
+  rewrite Invalid_is_noop; try assumption.
+  unfold run_if_valid at 2.
+  unfold fst.
+  rewrite Hinvalid.
+  apply IHl; assumption.
+Qed.
+</pre>
+      </details>
+
       So, here it is, the signature of the induction principle over blockchain transactions :
-      <pre class="code">
+      <pre class="code" id="snippet-lemma_fold_invariant_aux-theorem-signature">
 Theorem fold_invariant_aux :
   forall {state         : Type}                           (* The type of the contract storage, for us its 'storage_state' *)
-        {aux           : Type}                           (* The type of the auxiliaty cross-transaction data *)
-        (initial_value : state)                          (* Value of the storage before the first transaction *)
-        (initial_aux   : aux)                            (* Same as above for auxiliary data *)
-        {arg           : Type}                           (* Type of a transaction, for us its 'param' *)
-        (f             : state -> arg -> state)          (* The code of the contract's main function, 'main_option' *)
-        (g             : aux -> arg -> aux)              (* Function describing what to do with aux data during a transaction *)
-        (l             : list arg)                       (* The list of blockchain transactions *)
-        (valid         : t_env -> state -> arg -> bool)  (* The predicate saying when a transaction is valid or not *)
-        (filter_valid
-            := filter_args valid f initial_value)
-        (P             : state -> aux -> Prop)           (* The over-all-transaction property we want to prove *)
+         {aux           : Type}                           (* The type of the auxiliaty cross-transaction data *)
+         (initial_value : state)                          (* Value of the storage before the first transaction *)
+         (initial_aux   : aux)                            (* Same as above for auxiliary data *)
+         {arg           : Type}                           (* Type of a transaction, for us its 'param' *)
+         (f             : state -&gt; arg -&gt; state)          (* The code of the contract's main function, 'main_option' *)
+         (g             : aux -&gt; arg -&gt; aux)              (* Function describing what to do with aux data during a transaction *)
+         (l             : list arg)                       (* The list of blockchain transactions *)
+         (valid         : state -&gt; arg -&gt; bool)           (* The predicate saying when a transaction is valid or not *)
+         (filter_valid
+             := filter_args valid f initial_value)
+         (P             : state -&gt; aux -&gt; Prop)           (* The over-all-transaction property we want to prove *)
 
-        (Invalid_is_noop :                               (* A proof that invalid transactions lead to no change of state *)
-            forall state arg,
-              valid state arg = false ->
-              f state arg = state)
+         (Invalid_is_noop :                               (* A proof that invalid transactions lead to no change of state *)
+           forall state arg,
+             valid state arg = false -&gt;
+             f state arg = state)
 
-        (Hind : forall xarg xstate xaux,                 (* A proof that P is preserved over one call to the contract *)
-                  P xstate xaux ->
-                  (*In xarg l ->*)
-                  valid xstate xarg = true ->
-                  P (f xstate xarg) (g xaux xarg))
+         (Hind : forall xarg xstate xaux,                 (* A proof that P is preserved over one call to the contract *)
+                   P xstate xaux -&gt;
+                   (*In xarg l -&gt;*)
+                   valid xstate xarg = true -&gt;
+                   P (f xstate xarg) (g xaux xarg))
 
-        (H0 : P initial_value initial_aux),             (* A proof that P is true in the first place, at the start *)
+         (H0 : P initial_value initial_aux),             (* A proof that P is true in the first place, at the start *)
 
-        P (fold_left f               l  initial_value)  (* The return type, aka the proof that P hold all the time *)
-          (fold_left g (filter_valid l) initial_aux).</pre>
+         P (fold_left f               l  initial_value)  (* The return type, aka the proof that P hold all the time *)
+           (fold_left g (filter_valid l) initial_aux).</pre>
+      <details class="toggle hidden">
+        <summary>Proof of for <code>fold_invariant_aux</code></summary>
+        <pre class="code" id="snippet-lemma_fold_invariant_aux-theorem-proof">
+intros.
+unfold filter_valid.
+rewrite run_if_valid_rw; try constructor; try assumption.
+rewrite Psnd_rw.
+set (PP := Psnd P).
+generalize dependent initial_value.
+generalize dependent initial_aux.
+induction l as [ | hd tl Hind' ]; [compute; auto | ].
+intros.
+repeat rewrite fold_left_cons.
+unfold run_if_valid at 2.
+unfold fst.
+case_eq (valid initial_value hd).
+- intros Hvalid.
+  unfold snd.
+  apply Hind'.
+  apply Hind; try constructor; try assumption; auto.
+- intros Hinvalid.
+  rewrite Invalid_is_noop; try assumption.
+  apply Hind'; assumption.
+Qed.</pre>
+      </details>
       
       When faced with properties over lists of transactions, apply this lemma to reduce it into
       a simpler proof over 1 transaction. The problem will be reduced to 3 simpler properties to prove :
@@ -461,58 +607,411 @@ Theorem fold_invariant_aux :
     <section>
       <h1>A proof for the specification, using our lemma</h1>
 
-      Now that we write the contract, the specification, and introduced the induction-over-transaction lemma,
+      Now that we wrote the contract, the specification, and introduced the induction-over-transaction lemma,
       let's get to the core part : proving our specification.
+
+      <details class="toggle hidden">
+        <summary>Auxiliary lemmas for <code>unit_test_max</code></summary>
+        <pre class="code" id="snippet-proof_max-header">
+Require Import Notations.
+Require Import List.
+Import ListNotations.
+Require Import Nat.
+Require Import Coq.Arith.PeanoNat.
+Require Import Lia.
+
+Definition sold_for (s : storage) (l : list param) :=
+  match run_multiple_calls_ s l with
+  | Available    =&gt; 0
+  | CurrentBid n =&gt; n
+  | Sold       n =&gt; n
+  end.
+
+Theorem invalid_is_noop_on_main :
+  forall storage x,
+    valid_op storage x = false -&gt; main_get_storage storage x = storage.
+intros s x Hinvalid.
+unfold main_get_storage.
+unfold main.
+case_eq x.
+- case_eq s.
+  + intros Hs n Hx.
+    rewrite Hs in Hinvalid.
+    rewrite Hx in Hinvalid.
+    unfold valid_op in Hinvalid.
+    inversion Hinvalid.
+  + intros n Hs n0 Hx.
+    rewrite Hs in Hinvalid.
+    rewrite Hx in Hinvalid.
+    unfold valid_op in Hinvalid.
+    case_eq (n &lt;? n0).
+    * intros Hless.
+      rewrite Hless in Hinvalid.
+      inversion Hinvalid.
+    * intros Hmore.
+      unfold main_option.
+      rewrite Hmore.
+      reflexivity.
+  + intros n Hs n0 Hx.
+    reflexivity.
+- case_eq s.
+  + intros Hs Hx.
+    reflexivity.
+  + intros n Hs Hx.
+    rewrite Hs in Hinvalid.
+    rewrite Hx in Hinvalid.
+    unfold valid_op in Hinvalid.
+    inversion Hinvalid.
+  + intros n Hs Hx.
+    reflexivity.
+Qed.
+
+Theorem filter_valid_ops :
+  forall (l : list param) (s : storage),
+    run_multiple_calls_ s l =
+    run_multiple_calls_ s (valid_ops s l).
+
+intros l.
+induction l as [| hd tl IHl].
+- intro s.
+  auto.
+- intro s.
+  case_eq hd.
+  * intros n Hhd.
+    case_eq s.
+    + intro Hs.
+      unfold valid_ops.
+      fold valid_ops.
+      unfold valid_op.
+      simpl.
+      apply IHl.
+    + intro Hs.
+      case_eq (Hs &lt;? n).
+      -- intros HH XX.
+         unfold valid_ops.
+         unfold filter_args; fold (filter_args valid_op).
+         unfold valid_op.
+         unfold main.
+         unfold main_option.
+         rewrite HH.
+         simpl snd.
+         unfold run_multiple_calls_.
+         unfold fold_left.
+         unfold main_get_storage.
+         unfold main.
+         unfold main_option.
+         rewrite HH.
+         simpl snd.
+         apply IHl.
+      -- intros HH XX.
+         unfold valid_ops.
+         unfold filter_args; fold (filter_args valid_op).
+         unfold main.
+         unfold main_option.
+         unfold valid_op.
+         rewrite HH.
+         simpl snd.
+         unfold run_multiple_calls_.
+         unfold fold_left.
+         unfold main_get_storage.
+         unfold main.
+         unfold main_option.
+         rewrite HH.
+         simpl snd.
+         apply IHl.
+    + intros n0 Hs.
+      unfold valid_ops.
+      fold valid_ops.
+      unfold valid_op.
+      simpl.
+      apply IHl.
+  * intros Hhd.
+    unfold valid_ops.
+    fold valid_ops.
+    unfold valid_op.
+    case_eq s.
+    + intros Hs.
+      apply IHl.
+    + intros n Hs.
+      apply IHl.
+    + intros n Hs.
+      apply IHl.
+Qed.
+
+Lemma filter_valid_ops_short_proof :
+  forall (l : list param) (s : storage),
+    run_multiple_calls_ s l =
+    run_multiple_calls_ s (valid_ops s l).
+
+intros l.
+induction l as [| hd tl IHl].
+- auto.
+- intro s.
+  case_eq hd.
+  * intros n Hhd.
+    case_eq s;
+      intros n0;
+      intros;
+      try apply IHl.
+      case_eq (n0 &lt;? n);
+         intros HH;
+         unfold valid_ops;
+         unfold filter_args;
+         unfold valid_op;
+         unfold run_multiple_calls_;
+         unfold fold_left;
+         unfold main_get_storage;
+         unfold main;
+         unfold main_option;
+         rewrite HH;
+         try rewrite HH;
+         apply IHl.
+  * intros.
+    case_eq s;
+      intros;
+      apply IHl.
+Qed.
+
+Theorem filter_valid_ops' :
+  forall (l : list param),
+    run_multiple_calls l =
+    run_multiple_calls (valid_ops' l).
+intros.
+unfold run_multiple_calls.
+unfold valid_ops.
+apply filter_valid_ops.
+Qed.
+
+Lemma first_op_is_bid'' :
+  forall (l : list param),
+    match (valid_ops initial_storage l) with
+    | Bid n :: _ =&gt; True
+    | [] =&gt; True
+    | _ =&gt; False
+    end.
+intros l.
+induction l as [| p l IHl].
+- now compute.
+- case_eq p.
+  * intros n Hp.
+    unfold initial_storage.
+    unfold valid_ops.
+    unfold filter_args; fold (filter_args valid_op).
+    unfold valid_op.
+    fold valid_op.
+    auto.
+  * compute.
+    auto.
+Qed.
+
+Lemma first_op_is_bid_eqv :
+  forall (l : list param),
+    (valid_ops initial_storage l) &lt;&gt; [] -&gt;
+    (match (valid_ops initial_storage l) with
+     | Bid n :: _ =&gt; True
+     | _ =&gt; False
+     end)
+    = (match (valid_ops initial_storage l) with
+       | Bid n :: _ =&gt; True
+       | [] =&gt; True
+       | _ =&gt; False
+       end).
+intros l nonempty.
+set (filtered := valid_ops initial_storage l) in *.
+case_eq filtered.
+- contradiction.
+- auto.
+Qed.
+
+Theorem first_op_is_bid :
+  forall (l : list param),
+    (valid_ops initial_storage l) &lt;&gt; [] -&gt;
+    match (valid_ops initial_storage l) with
+     | Bid n :: _ =&gt; True
+     | _ =&gt; False
+     end.
+intros l nonempty.
+set (H := first_op_is_bid_eqv l nonempty).
+rewrite H.
+apply first_op_is_bid''.
+Qed.
+
+Fixpoint max_bid (s : storage) (l : list param) :=
+  match l with
+  | [] =&gt; s
+  | Bid n :: tl =&gt;
+    match s with
+    | Available =&gt; max_bid (CurrentBid n) tl
+    | CurrentBid max =&gt;
+      if n &lt;? max
+      then max_bid (CurrentBid max) tl
+      else max_bid (CurrentBid n) tl
+    | Sold n =&gt; Sold n (* TODO: impossible with assumption valid_ops *)
+    end
+  | hd :: tl =&gt; max_bid s tl
+  end.
+
+(*
+Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim ] initial_max.
+Compute fold_left u_max                      [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ] initial_max.
+Compute fold_left u_max (valid_ops Available [ Bid 1; Bid 2; Bid 3; Claim; Bid 4 ]) initial_max.
+*)
+
+Definition u_max (a : nat) (p : param) :=
+  match p with
+  | Bid n =&gt; max n a
+  | Claim =&gt; a
+  end.
+
+Lemma fold_get_bids :
+  forall l z,
+    (fold_left max (get_bids (valid_ops' l)) z)
+  = (fold_left u_max (valid_ops' l) z).
+intros l.
+induction (valid_ops' l) as [| a ll IHll]; [ compute; auto | ].
+intros z0.
+unfold get_bids.
+unfold map_filter; fold (map_filter get_bid).
+case_eq a.
+- intros n Ha.
+  unfold get_bid at 1.
+  fold ([n] ++ (map_filter get_bid ll)).
+  rewrite fold_left_app.
+  fold (get_bids ll).
+  fold ([Bid n] ++ ll).
+  rewrite fold_left_app.
+  replace (fold_left u_max [Bid n] z0) with (fold_left max [n] z0).
+  + apply IHll.
+  + apply Nat.max_comm.
+- intros Ha.
+  unfold get_bid at 1.
+  fold ([Claim] ++ ll).
+  rewrite fold_left_app.
+  fold (get_bids ll).
+  replace (fold_left u_max [Claim] z0) with z0.
+  + apply IHll.
+  + reflexivity.
+Qed.
+
+Lemma main_preserves_invariant_max :
+  forall (xarg : param)
+         (xstate : storage)
+         (xaux : nat)
+         (Pprev : Pmax xstate xaux)
+         (Hvalid : valid_op xstate xarg = true),
+    Pmax (main_get_storage xstate xarg) (u_max xaux xarg).
+intros xarg xstate xaux Pprev Hvalid.
+case_eq xarg.
+- case_eq xstate.
+  * intros Hstate n Harg.
+    cut (xaux = 0).
+    + intros Haux.
+      unfold u_max.
+      rewrite Haux.
+      rewrite Nat.max_0_r.
+      compute.
+      auto.
+    + unfold Pmax in Pprev.
+      rewrite Hstate in Pprev.
+      assumption.
+  * intros n Hstate n0 Harg.
+    rewrite Hstate in Hvalid.
+    rewrite Harg in Hvalid.
+    unfold valid_op in Hvalid.
+    unfold Pmax in Pprev.
+    rewrite Hstate in Pprev.
+    unfold main_get_storage.
+    unfold u_max.
+    unfold main.
+    unfold main_option.
+    rewrite Hvalid.
+    rewrite &lt;- Pprev.
+    unfold snd.
+    unfold Pmax.
+    rewrite Nat.max_comm.
+    rewrite Nat.max_r.
+    + reflexivity.
+    + apply Nat.leb_le in Hvalid.
+      lia.
+  * intros n Hstate n0 Harg.
+    rewrite Hstate in Hvalid.
+    rewrite Harg in Hvalid.
+    unfold valid_op in Hvalid.
+    inversion Hvalid.
+- case_eq xstate.
+  * intros Hstate Harg.
+    rewrite Hstate, Harg in Hvalid.
+    unfold valid_op in Hvalid.
+    inversion Hvalid.
+  * intros n Hstate Harg.
+    unfold main_get_storage.
+    unfold u_max.
+    unfold main.
+    unfold main_option.
+    unfold snd.
+    unfold Pmax.
+    rewrite Hstate in Pprev.
+    unfold Pmax in Pprev.
+    rewrite Pprev in *.
+    reflexivity.
+  * intros n Hstate Harg.
+    unfold main_get_storage.
+    unfold u_max.
+    unfold main.
+    unfold main_option.
+    unfold fail_in_main.
+    unfold snd.
+    unfold Pmax.
+    rewrite Hstate in Pprev.
+    unfold Pmax in Pprev.
+    rewrite Pprev in *.
+    reflexivity.
+Qed.
+</pre>
+      </details>
+
       <br>
       We'll walk through the proof of <code>spec_max</code>.
       <br>
       As a reminder, here's the definition of <code>spec_max</code> :
 
-      <pre class="code">
-Definition spec_max :=
-  forall (l : list param),
-    Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l))).</pre>
+      <pre class="code" id="snippet-proof_max-reminder">
+Print spec_max.
+(* spec_max =
+    forall l : list param,
+      Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l)))
+    : Prop *)
+</pre>
 
       <h3>Step 1 : Decomposing with the lemma</h3>
 
       Now for the proof, the first part consists essentially in applying the lemma to decompose it into 3 subproofs :
 
-      <pre class="code">
+      <pre class="code" id="snippet-proof_max-proof">
 Theorem unit_test_max : spec_max.
 intros l.
 
-(* The first part is just about unfolding the def of the 'max' *)
 unfold list_max.
-rewrite <- fold_symmetric; cycle 1. 
-- (* Proving that 'max' is associative *)
-  intros x y z.
+rewrite &lt;- fold_symmetric; cycle 1. 
+- intros x y z.
   rewrite Nat.max_assoc.
   reflexivity.
-- (* Proving that 'max' with 0 is commutative *)
-  intros y.
+- intros y.
   rewrite Nat.max_0_l.
   rewrite Nat.max_0_r.
   reflexivity.
-- (* Main part *)
-  (* Some rewriting/unfolding to prepare it for applying the lemma *)
-  rewrite fold_get_bids.
+- rewrite fold_get_bids.
   unfold valid_ops'.
   unfold valid_ops.
   unfold run_multiple_calls.
   unfold run_multiple_calls_.
-  (* Now we decompose the proof into the 3 simpler subproofs *)
   apply fold_invariant_aux.
-  + (* Subproof 1 : Proving that invalid transactions don't change the state *)
-    (* Applying 'invalid_is_noop_on_main', introduced below *)
-    intros state arg Hinvalid.
+  + intros state arg Hinvalid.
     rewrite invalid_is_noop_on_main; auto.
-  + (* Subproof 2 : Proving the induction hypothesis *)
-    (* i.e. a call to the contract preserves the invariant *)
-    (* Applying 'main_preserves_invariant_max', introduced below *)
-    apply main_preserves_invariant_max.
-  + (* Subproof 3 : Proving that the hypothesis holds for the initial state *)
-    compute; auto.
-Qed.</pre>
+  + apply main_preserves_invariant_max.
+  + compute; auto.
+Qed.
+</pre>
 
 
       <h3>Step 2 : Subproof that invalid transactions don't change the state</h3>
@@ -744,12 +1243,99 @@ Qed.</pre>
     </section>
 
     <section>
-      <h1>Extraction (TODO)</h1>
-      <pre class="code">
-        Definition id : forall {A}, A -> A := fun _ x => x.
-        Require Import Extraction.
-        Extraction "file.ml" id.</pre>
-  <button onclick="get_file_string('/home/file.ml', function(x) { document.getElementById('extracted').innerText = x; })">▶️ Extract</button></pre>
+      <h1>Extraction</h1>
+      We link a few Coq definitions to their equivalent in OCaml / CameLIGO, and use
+      <code>Extraction "file.ml" main.</code> to translate the <code>main</code> function
+      to OCaml.
+      <details class="toggle hidden">
+        <summary>Extraction definitions</summary>
+        <pre class="code" id="snippet-extract-definitions">
+Require Import List.
+Import ListNotations.
+Require Import Nat.
+
+(* Extract to OCaml language *)
+Require Extraction.
+Extraction Language OCaml.
+
+(* LIGO built-ins *)
+Extract Inlined Constant tez =&gt; &quot;tez&quot;.
+Extract Inlined Constant operation =&gt; &quot;operation&quot;.
+Extract Constant contract &quot;'t&quot; =&gt; &quot;'t contract&quot;.
+Extract Inlined Constant destination_account =&gt; &quot;(Tezos.get_contract_with_error (Tezos.get_sender ()) &quot;&quot;oops&quot;&quot; : unit contract)&quot;.
+Extract Inlined Constant transaction =&gt; &quot;Tezos.transaction&quot;.
+Extract Inlined Constant mutez =&gt; &quot;(fun n -&gt; mutez_of_nat (abs n))&quot;.
+
+(* OCaml built-ins *)
+Extract Inductive unit =&gt; unit [&quot;()&quot;].
+(* Implement external LIGO function &quot;fail&quot; *)
+(*Extraction Implicit fail [A a].*)
+(* It is okay for some proofs to implement our identity function named &quot;fail&quot; with
+   &quot;failwith&quot;, even in the case where the code isn't
+   &quot;let main = function … | … -&gt; fail | …&quot; but e.g. is
+   &quot;let main = function … | … -&gt; f (fail) | …&quot;.
+
+   In the coq world, the extra f(identity(some_value)) in the chain of calls
+   still needs to satisfy the proofs. This is okay for some proofs, but not e.g.
+   for proofs saying that a user is always able to claim an auction after some
+   time (the action of claiming an auction could go through a &quot;fail&quot; path, which
+   would make it seem possible in Coq but wouldn't actually be possible on-chain).
+
+   We therefore use fail_in_main only once, at the top-level, where it is obvious
+   that its return value is never used by the rest of the contract.
+
+   If the following line is removed, the resulting contract will behave exactly
+   the same way, but will consume gas and perform a no-op instead of warning the
+   user before performing invalid operations.
+ *)
+Definition ok_main (ps : param * storage) : (list operation * storage) :=
+  match ps with
+  (* Start a bid *)
+  | (Bid newAmount, Available) =&gt; ([], CurrentBid newAmount)
+  (* e.g. rest is not implemented yet *)
+  | (_p,s)                     =&gt; fail_in_main ([], s)
+  end.
+Definition bad_f (x : list operation * storage) := (fst x, CurrentBid 42).
+Definition bad_main (ps : param * storage) : (list operation * storage) :=
+  match ps with
+  (* Start a bid *)
+  | (Bid newAmount, Available) =&gt; ([], CurrentBid newAmount)
+  | (_p,s)                     =&gt; bad_f (fail_in_main ([], s))
+  end.
+Extract Inlined Constant fail_in_main =&gt; &quot;(fun (_ : (operation list * storage)) : (operation list * storage) -&gt; failwith &quot;&quot;Err&quot;&quot;)&quot;.
+(*Unset Extraction SafeImplicits.*)
+Extract Inductive list =&gt; &quot;list&quot; [ &quot;[]&quot; &quot;(::)&quot; ].
+Extract Inductive prod =&gt; &quot;(*)&quot;  [ &quot;(,)&quot; ].
+Extract Inductive option =&gt; &quot;option&quot;  [ &quot;Some&quot; &quot;None&quot; ].
+Extract Inductive nat =&gt; nat [ &quot;0&quot; &quot;succ&quot; ] &quot;(fun fO fS n -&gt; if n=0 then fO () else fS (n-1))&quot;.
+Extract Inductive bool =&gt; &quot;bool&quot; [ &quot;true&quot; &quot;false&quot; ].
+Extract Inlined Constant ltb =&gt; &quot;(fun (a : nat) (b : nat) : bool -&gt; a &lt; b)&quot;.
+
+(* Prevent access to opaque definitions. *)
+Unset Extraction AccessOpaque.
+</pre>
+      </details>
+      Checking assumptions:
+      <pre class="code" id="snippet-extract-print-assumptions">
+Definition checkAssumptions := (main, unit_test_max).
+Print Assumptions checkAssumptions.
+(*
+Axioms:
+transaction : ∀ param : Type, param → tez → contract param → operation
+operation  : Type
+mutez  : nat → tez
+destination_account  : contract unit
+*)
+</pre>
+      Extracting the code:
+      <pre class="code" id="snippet-extract-extraction">
+(* Compile Coq code to OCaml *)
+Extraction &quot;contract.1.ocaml.ml&quot; main.
+</pre>
+      <button onclick="prouf.get_file_string('/home/contract.1.ocaml.ml', prouf.cmExtracted.setValue)">▶️ Extract</button>
+      <textarea readonly="true" id="extracted">
+        (* Extracted code will appear here *)
+      </textarea>
     </section>
 
     <section>

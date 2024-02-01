@@ -14,6 +14,7 @@
   <link rel="stylesheet" type="text/css" href="common/css/jscoq.css" />
   <link href="common/jquery-ui/jquery-ui.css" rel="stylesheet">
   <!--<script src="common/jquery-ui/jquery-ui.js"></script> Loaded after jscoq which loads its own version of jQuery-->
+  <link rel="stylesheet" type="text/css" href="kbd.css/kbd.css" />
 </head>
 <body id="ide-wrapper" class="jscoq-main jscoq-ide layout-flex">
   <script src="common/jscoq.js"></script>
@@ -57,6 +58,8 @@
       <p>Therefore the type of the state will be :</p>
       <pre class="code" id="snippet-contract-type-storage">
       </pre>
+
+      To run the code above, click to place the cursor after period marking the end of a Coq sentence, and press <kbd>Alt</kbd>+<kbd>Right</kbd>.
 
       <details class="toggle hidden">
         <summary>type: metadata</summary>
@@ -114,15 +117,24 @@
       </pre>
 
       <details class="toggle hidden">
-        <pre class="code" id="snippet-tactics-utils">
-        </pre>  
+        <summary>Some useful syntax extensions</summary>
+        <pre class="code" id="snippet-contract-tactics-utils">
+        </pre>
       </details>
-
-      <pre class="code" id="snippet-tactics-test-demo">
-      </pre>
     </section>
     <section>
       <h1>Specification</h1>
+
+      <details class="toggle hidden">
+        <summary>Utility function <code>filter_args</code></summary>
+        <pre class="code" id="snippet-filter_args">
+        </pre>
+      </details>
+      <details class="toggle hidden">
+        <summary>Import libraries</summary>
+        <pre class="code" id="snippet-specification-imports">
+        </pre>
+      </details>
 
       <h3> Random tests vs. formal proofs </h3>
       <p>When writing a program, it is good practice to write tests.
@@ -151,9 +163,14 @@
       Our specification will thus consist in these two properties to prove :
 
       <p>
-        <em>All bids are less than or equal to the sold-for amount.</em>
+        <em class="prouf-spec">All bids are less than or equal to the sold-for amount.</em>
 
-        <pre class="code">
+        <details class="toggle hidden">
+          <summary>Utilities for <code>spec_bids_are_less_than_sold_for_amount</code></summary>
+          <pre class="code" id="snippet-specification-utils-spec_bids_are_less_than_sold_for_amount">
+          </pre>
+        </details>
+        <pre class="code" id="snippet-specification-spec_bids_are_less_than_sold_for_amount">
 Definition spec_bids_are_less_than_sold_for_amount :=
   forall (l : list param) (amount : nat),
     forall (Hcontains : contains_bid l amount),
@@ -166,9 +183,14 @@ Definition spec_bids_are_less_than_sold_for_amount :=
       </p>
 
       <p>
-        <em>The storage is equal to the max of the bids seen so far</em>
+        <em class="prouf-spec">The storage is equal to the max of the bids seen so far</em>
 
-        <pre class="code">
+        <details class="toggle hidden">
+          <summary>Utilities for <code>spec_max</code></summary>
+          <pre class="code" id="snippet-specification-utils-spec_max">
+          </pre>
+        </details>
+        <pre class="code" id="snippet-specification-spec_max">
 Definition spec_max :=
   forall (l : list param),
     Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l))).
@@ -273,8 +295,14 @@ Sold 23</pre>
 
       <h3>Signature of the lemma</h3>
 
+      <details class="toggle hidden">
+        <summary>Auxiliary lemmas for <code>fold_invariant_aux</code></summary>
+        <pre class="code" id="snippet-lemma_fold_invariant_aux-header">
+        </pre>
+      </details>
+
       So, here it is, the signature of the induction principle over blockchain transactions :
-      <pre class="code">
+      <pre class="code" id="snippet-lemma_fold_invariant_aux-theorem-signature">
 Theorem fold_invariant_aux :
   forall {state         : Type}                           (* The type of the contract storage, for us its 'storage_state' *)
         {aux           : Type}                           (* The type of the auxiliaty cross-transaction data *)
@@ -304,7 +332,12 @@ Theorem fold_invariant_aux :
 
         P (fold_left f               l  initial_value)  (* The return type, aka the proof that P hold all the time *)
           (fold_left g (filter_valid l) initial_aux).
+      </pre>
+      <details class="toggle hidden">
+        <summary>Proof of for <code>fold_invariant_aux</code></summary>
+        <pre class="code" id="snippet-lemma_fold_invariant_aux-theorem-proof">
         </pre>
+      </details>
       
       When faced with properties over lists of transactions, apply this lemma to reduce it into
       a simpler proof over 1 transaction. The problem will be reduced to 3 simpler properties to prove :
@@ -341,24 +374,33 @@ Theorem fold_invariant_aux :
     <section>
       <h1>A proof for the specification, using our lemma</h1>
 
-      Now that we write the contract, the specification, and introduced the induction-over-transaction lemma,
+      Now that we wrote the contract, the specification, and introduced the induction-over-transaction lemma,
       let's get to the core part : proving our specification.
+
+      <details class="toggle hidden">
+        <summary>Auxiliary lemmas for <code>unit_test_max</code></summary>
+        <pre class="code" id="snippet-proof_max-header">
+        </pre>
+      </details>
+
       <br>
       We'll walk through the proof of <code>spec_max</code>.
       <br>
       As a reminder, here's the definition of <code>spec_max</code> :
 
-      <pre class="code">
-Definition spec_max :=
-  forall (l : list param),
-    Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l))).
+      <pre class="code" id="snippet-proof_max-reminder">
+Print spec_max.
+(* spec_max =
+    forall l : list param,
+      Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l)))
+    : Prop *)
       </pre>
 
       <h3>Step 1 : Decomposing with the lemma</h3>
 
       Now for the proof, the first part consists essentially in applying the lemma to decompose it into 3 subproofs :
 
-      <pre class="code">
+      <pre class="code" id="snippet-proof_max-proof">
 Theorem unit_test_max : spec_max.
 intros l.
 
@@ -629,14 +671,28 @@ Qed.
     </section>
 
     <section>
-      <h1>Extraction (TODO)</h1>
-      <pre class="code">
-        Definition id : forall {A}, A -> A := fun _ x => x.
-        Require Import Extraction.
-        Extraction "file.ml" id.
-  </pre>
-  <button onclick="get_file_string('/home/file.ml', function(x) { document.getElementById('extracted').innerText = x; })">▶️ Extract</button>
-  <pre id="extracted"></pre>
+      <h1>Extraction</h1>
+      We link a few Coq definitions to their equivalent in OCaml / CameLIGO, and use
+      <code>Extraction "file.ml" main.</code> to translate the <code>main</code> function
+      to OCaml.
+      <details class="toggle hidden">
+        <summary>Extraction definitions</summary>
+        <pre class="code" id="snippet-extract-definitions">
+          Definition id : forall {A}, A -> A := fun _ x => x.
+          Require Import Extraction.
+          Extraction "file.ml" id.
+        </pre>
+      </details>
+      Checking assumptions:
+      <pre class="code" id="snippet-extract-print-assumptions">
+      </pre>
+      Extracting the code:
+      <pre class="code" id="snippet-extract-extraction">
+      </pre>
+      <button onclick="prouf.get_file_string('/home/contract.1.ocaml.ml', prouf.cmExtracted.setValue)">▶️ Extract</button>
+      <textarea readonly="true" id="extracted">
+        (* Extracted code will appear here *)
+      </textarea>
     </section>
 
     <section>

@@ -1343,6 +1343,12 @@ var prouf = (function(waitJsCoqLoaded) {
     $ = _.extendJQuery(jQuery);
     
     _.init_darkmode();
+    
+    prouf.cmExtracted = CodeMirror.fromTextArea(document.getElementById('extracted'), {
+      mode:  "mllike",
+      readOnly: true,
+    });
+
     _.my_init();
 
     await _.waitJsCoqReady;
@@ -1363,7 +1369,10 @@ var prouf = (function(waitJsCoqLoaded) {
     _.my_init2()
     _.my_init_hover_actions();
 
-    var line = parseInt(window.location.hash.substring(1)) || 94;
+    var hash_prefix='#chapter-1-line-';
+    var line = parseInt(window.location.hash.substring(hash_prefix.length));
+    var gotoLine = !!line;
+    line = line || 0;
     var cm = coq.provider.snippets.find(cm => {
       var first = cm.editor.options.firstLineNumber;
       return first <= line && first + cm.editor.lastLine() >= line;
@@ -1376,12 +1385,14 @@ var prouf = (function(waitJsCoqLoaded) {
     cm.editor.focus();
     $('main')[0].scrollTo(old_scroll.x, old_scroll.y);
 
-    cm.editor.scrollIntoView(l);
-    window.setTimeout(function() {
-      coq.goCursor(); // for some reason this interrupts scrolling, delaying (TODO: not by 1000ms but wait for end of smooth scroll)
-    }, 1000);
+    if (gotoLine) {
+      cm.editor.scrollIntoView(l);
+      window.setTimeout(function() {
+        coq.goCursor(); // for some reason this interrupts scrolling, delaying (TODO: not by 1000ms but wait for end of smooth scroll)
+      }, 1000);
+    }
 
-    $(document.body).on('click', '.CodeMirror-linenumber', function(ev) { window.location.href = '#' + $(ev.target).text(); });
+    $(document.body).on('click', '.CodeMirror-linenumber', function(ev) { window.location.href = '#chapter-1-line-' + $(ev.target).text(); });
 
     // TODO: jsCoq handles multiple workers, this isn't reliable
     coq.coq.worker.addEventListener('message', _msg => {

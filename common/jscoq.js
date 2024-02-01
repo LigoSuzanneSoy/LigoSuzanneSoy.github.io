@@ -38,11 +38,6 @@ var waitJsCoqLoaded = new Promise((resolve, reject) => {
 });
 
 async function jsCoqLoad() {
-    // - remove empty code fragments (coqdoc generates some spurious ones)
-    $('pre.code').each(function() {
-        if ($(this).text().match(/^\s*$/)) $(this).remove();
-    });
-
     // - make page div focusable so that keyboard scrolling works
     var page = document.querySelector('#page');
     page.setAttribute('tabindex', -1);

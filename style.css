@@ -6,7 +6,7 @@ html.dark {
   --tuto-foreground: #ccc;
   --tuto-border: #222;
   --tuto-code-background: #111;
-  --tuto-code-foreground: #04c; /* not adjusted */
+  --tuto-code-foreground: #3bf; /* not adjusted */
   --tuto-h1-foreground: #ddd;
   --tuto-pre-em-foreground: red; /* not adjusted */
   --tuto-kbd-fg: #bbb;
@@ -244,11 +244,16 @@ ul:last-child {
 
 /* Coqueligot-specific styles */
 .toggle.hidden {
-  opacity: 0.2;
+  opacity: 0.9;
+  filter: sepia(0.5);
+  margin: 1em 0;
+  border-left: thick dashed wheat;
+  padding-left: 1em;
 }
 
-.toggle.hidden:hover {
-  opacity: 0.5;
+.toggle.hidden:hover, .toggle.hidden:focus-within {
+  opacity: 1;
+  filter: sepia(0);
 }
 
 html #jscoq-plug { /* override using html as an extra qualifier */
@@ -400,7 +405,7 @@ html #panel-wrapper > .flex-container {
   text-decoration: underline;
   color: #444;
 }
-.CodeMirror-linenumber:hover:before {
+.CodeMirror-linenumber:hover::before {
   content: '#';
   display: inline-block;
   position: relative;
@@ -635,7 +640,7 @@ html {
     position: relative;
 }
 
-.prouf-placeholder-off:after, .prouf-placeholder:after {
+.prouf-placeholder-off::after, .prouf-placeholder::after {
   content: "";
   /*z-index: 999;*/
   display: inline-block;
@@ -651,13 +656,13 @@ html {
   transition: background 0.3s, backdrop-filter 0.3s;
 }
 
-pre.CodeMirror-line:hover .prouf-placeholder-off:after,
-pre.CodeMirror-line:hover .prouf-placeholder:after {
+pre.CodeMirror-line:hover .prouf-placeholder-off::after,
+pre.CodeMirror-line:hover .prouf-placeholder::after {
   background: #f5f5dc30;
   backdrop-filter: saturate(0.9) blur(0.05ex);
 }
 
-html body .prouf-placeholder-off:after {
+html body .prouf-placeholder-off::after {
   animation: prouf-placeholder-fade-out 0.3s forwards;
 }
 
@@ -675,18 +680,18 @@ for (var i = 7; i < 19; i++) {
 }
 */
 
-.cm-s-blackboard .company-coq-sub:before {
+.cm-s-blackboard .company-coq-sub::before {
   color: #FF6400;
 }
 
-.company-coq-sub:before {
+.company-coq-sub::before {
   color: #FF6400;
 }
 
-.company-coq-sub:before {
+.company-coq-sub::before {
   content: attr(data-company-coq-sub-content);
   display: inline-block;
-  font-size: 70%;
+  font-size: 80%;
   top:0.1ex;
   width: 0px;
   /* left: -0.5ex; */
@@ -699,4 +704,15 @@ html .company-coq-sub {
   top: 0em;
   padding-top: 0em;
   color: transparent !important;
+}
+
+details summary::after {
+  content: "Click to expand…";
+  display: block;
+  margin-top: 1em;
+  font-style: italic;
+}
+
+details[open] summary::after {
+  display: none;
 }
