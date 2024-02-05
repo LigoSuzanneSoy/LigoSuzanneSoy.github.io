@@ -308,7 +308,7 @@ Sold 23</pre>
       </details>
 
       So, here it is, the signature of the induction principle over blockchain transactions :
-      <pre class="code" id="snippet-lemma_fold_invariant_aux-theorem-signature">
+      <pre class="code" id="snippet-lemma_fold_invariant_aux-lemma-signature">
 Theorem fold_invariant_aux :
   forall {state         : Type}                           (* The type of the contract storage, for us its 'storage_state' *)
         {aux           : Type}                           (* The type of the auxiliaty cross-transaction data *)
@@ -339,9 +339,13 @@ Theorem fold_invariant_aux :
         P (fold_left f               l  initial_value)  (* The return type, aka the proof that P hold all the time *)
           (fold_left g (filter_valid l) initial_aux).
       </pre>
+      
+      This proof is part of Coqueligot, and can be re-used to prove other contracts than our very simple auction
+      contract. It is included here for completeness, but does not need to be carefully examined.
+
       <details class="toggle hidden">
-        <summary>Proof of for <code>fold_invariant_aux</code></summary>
-        <pre class="code" id="snippet-lemma_fold_invariant_aux-theorem-proof">
+        <summary>Proof of <code>fold_invariant_aux</code></summary>
+        <pre class="code" id="snippet-lemma_fold_invariant_aux-lemma-proof">
         </pre>
       </details>
       
@@ -402,7 +406,7 @@ Print spec_max.
     : Prop *)
       </pre>
 
-      <h3>Step 1 : Decomposing with the lemma</h3>
+      <h3>Step 1 : Decomposing with the proof goal using the fold_invariant_aux lemma</h3>
 
       Now for the proof, the first part consists essentially in applying the lemma to decompose it into 3 subproofs :
 
@@ -444,12 +448,17 @@ rewrite <- fold_symmetric; cycle 1.
 Qed.
       </pre>
 
+      <details class="toggle hidden">
+        <summary><em>Proof management detais to start the sub-proofs…</em></summary>
+        <pre class="code" id="snippet-proof_max-subproofs-intermission">
+        </pre>
+      </details>
 
       <h3>Step 2 : Subproof that invalid transactions don't change the state</h3>
 
       Property to prove :
 
-      <pre class="code">
+      <pre class="code" id="snippet-proof_max-invalid_is_noop_on_main-signature">
       Theorem invalid_is_noop_on_main :
         forall storage x,
           valid_op storage x = false -> main_get_storage storage x = storage.
@@ -499,7 +508,7 @@ Qed.
       some parts of the code.
       </p>
 
-      <pre class="code">
+      <pre class="code" id="snippet-proof_max-invalid_is_noop_on_main-proof">
 Theorem invalid_is_noop_on_main :
   forall storage x,
     valid_op storage x = false -> main_get_storage storage x = storage.
@@ -571,7 +580,7 @@ Qed.
       The valid cases are simplified enough so they can be proven by executing as much code as possible, using <code>compute</code>,
       or by noticing trivial equalities, via <code>reflexivity</code>.
 
-      <pre class="code">
+      <pre class="code" id="snippet-proof_max-main_preserves_invariant_max">
 Lemma main_preserves_invariant_max :
   forall (xarg : param)
         (xstorage : storage)
@@ -660,7 +669,13 @@ case_eq xarg.
 Qed.
       </pre>
 
-      Here is it for the proof of <code>spec_max</code>.
+      <details class="toggle hidden">
+        <summary><em>Proof management detais to finish the sub-proofs…</em></summary>
+        <pre class="code" id="snippet-proof_max-subproofs-footer">
+        </pre>
+      </details>
+
+      Aside from some simple auxiliary lemmas, the proof of <code>spec_max</code> is now done.
       <br>
       Proofs for other theorems will often follow the same strategy :
       <ul>
@@ -689,10 +704,24 @@ Qed.
           Extraction "file.ml" id.
         </pre>
       </details>
-      Checking assumptions:
+      
+      Before doing that, however, we will check the assumptions made in these proofs,
+      i.e. the axioms and LIGO built-in opaque functions that have been used. In this
+      case, the only "axioms" used are the LIGO built-in function <code>transaction</code>,
+      the LIGO built-in types <code>operation</code> and <code>mutez</code>, as well as
+      <code>destination_account</code> which is a thin wrapper around the LIGO built-in
+      <code>Tezos.get_sender</code>.
+
       <pre class="code" id="snippet-extract-print-assumptions">
       </pre>
-      Extracting the code:
+
+      We now know that our proven program relies on the correct specification of its tests
+      (e.g. <code>spec_max</code>), and on the correct implementation of these LIGO built-ins,
+      as well as the correct implementation of the LIGO language itself and of the thin OCaml
+      → CameLIGO translation step. This means that aside from these fragments, we have not
+      used some unproven axiom in our proof of correctness for the spec_max specification.
+
+      We can now extract the code:
       <pre class="code" id="snippet-extract-extraction">
       </pre>
       <button onclick="prouf.get_file_string('/home/contract.1.ocaml.ml', (f,v) => prouf.cmExtracted.setValue(v))">▶️ Extract</button>

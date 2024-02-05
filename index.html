@@ -522,39 +522,43 @@ Qed.
       </details>
 
       So, here it is, the signature of the induction principle over blockchain transactions :
-      <pre class="code" id="snippet-lemma_fold_invariant_aux-theorem-signature">
-Theorem fold_invariant_aux :
-  forall {state         : Type}                                (* The type of the contract storage, for us its 'storage_state' *)
-         {aux           : Type}                           (* The type of the auxiliaty cross-transaction data *)
-         (initial_value : state)                          (* Value of the storage before the first transaction *)
-         (initial_aux   : aux)                            (* Same as above for auxiliary data *)
-         {arg           : Type}                           (* Type of a transaction, for us its 'param' *)
-         (f             : state -&gt; arg -&gt; state)              (* The code of the contract's main function, 'main_option' *)
-         (g             : aux -&gt; arg -&gt; aux)                  (* Function describing what to do with aux data during a transaction *)
-         (l             : list arg)                       (* The list of blockchain transactions *)
-         (valid         : state -&gt; arg -&gt; bool)               (* The predicate saying when a transaction is valid or not *)
-         (filter_valid
-             := filter_args valid f initial_value)
-         (P             : state -&gt; aux -&gt; Prop)                  (* The over-all-transaction property we want to prove *)
+      <pre class="code" id="snippet-lemma_fold_invariant_aux-lemma-signature">
+Lemma fold_invariant_aux :
+  forall {state         : Type}                           (* The type of the contract storage, for us its 'storage_state' *)
+    {aux           : Type}                           (* The type of the auxiliaty cross-transaction data *)
+    (initial_value : state)                          (* Value of the storage before the first transaction *)
+    (initial_aux   : aux)                            (* Same as above for auxiliary data *)
+    {arg           : Type}                           (* Type of a transaction, for us its 'param' *)
+    (f             : state -&gt; arg -&gt; state)            (* The code of the contract's main function, 'main_option' *)
+    (g             : aux -&gt; arg -&gt; aux)                (* Function describing what to do with aux data during a transaction *)
+    (l             : list arg)                       (* The list of blockchain transactions *)
+    (valid         : state -&gt; arg -&gt; bool)             (* The predicate saying when a transaction is valid or not *)
+    (filter_valid
+        := filter_args valid f initial_value)
+    (P             : state -&gt; aux -&gt; Prop)                (* The over-all-transaction property we want to prove *)
 
-         (Invalid_is_noop :                               (* A proof that invalid transactions lead to no change of state *)
-           forall state arg,
-             valid state arg = false -&gt;
-             f state arg = state)
+    (Invalid_is_noop :                               (* A proof that invalid transactions lead to no change of state *)
+      forall state arg,
+        valid state arg = false -&gt;
+        f state arg = state)
 
-         (Hind : forall xarg xstate xaux,                      (* A proof that P is preserved over one call to the contract *)
-                   P xstate xaux -&gt;
-                   (*In xarg l -&gt;*)
-                   valid xstate xarg = true -&gt;
-                   P (f xstate xarg) (g xaux xarg))
+    (Hind : forall xarg xstate xaux,                      (* A proof that P is preserved over one call to the contract *)
+              P xstate xaux -&gt;
+              (*In xarg l -&gt;*)
+              valid xstate xarg = true -&gt;
+              P (f xstate xarg) (g xaux xarg))
 
-         (H0 : P initial_value initial_aux),             (* A proof that P is true in the first place, at the start *)
+    (H0 : P initial_value initial_aux),              (* A proof that P is true in the first place, at the start *)
 
-         P (fold_left f               l  initial_value)  (* The return type, aka the proof that P hold all the time *)
-           (fold_left g (filter_valid l) initial_aux).</pre>
+    P (fold_left f               l  initial_value)   (* The return type, aka the proof that P hold all the time *)
+      (fold_left g (filter_valid l) initial_aux).</pre>
+      
+      This proof is part of Coqueligot, and can be re-used to prove other contracts than our very simple auction
+      contract. It is included here for completeness, but does not need to be carefully examined.
+
       <details class="toggle hidden">
-        <summary>Proof of for <code>fold_invariant_aux</code></summary>
-        <pre class="code" id="snippet-lemma_fold_invariant_aux-theorem-proof">
+        <summary>Proof of <code>fold_invariant_aux</code></summary>
+        <pre class="code" id="snippet-lemma_fold_invariant_aux-lemma-proof">
 intros.
 unfold filter_valid.
 rewrite run_if_valid_rw; try constructor; try assumption.
@@ -633,44 +637,7 @@ Definition sold_for (s : storage) (l : list param) :=
   | Sold       n =&gt; n
   end.
 
-Theorem invalid_is_noop_on_main :
-  forall storage x,
-    valid_op storage x = false -&gt; main_get_storage storage x = storage.
-intros s x Hinvalid.
-unfold main_get_storage.
-unfold main.
-case_eq x.
-- case_eq s.
-  + intros Hs n Hx.
-    rewrite Hs in Hinvalid.
-    rewrite Hx in Hinvalid.
-    unfold valid_op in Hinvalid.
-    inversion Hinvalid.
-  + intros n Hs n0 Hx.
-    rewrite Hs in Hinvalid.
-    rewrite Hx in Hinvalid.
-    unfold valid_op in Hinvalid.
-    case_eq (n &lt;? n0).
-    * intros Hless.
-      rewrite Hless in Hinvalid.
-      inversion Hinvalid.
-    * intros Hmore.
-      unfold main_option.
-      rewrite Hmore.
-      reflexivity.
-  + intros n Hs n0 Hx.
-    reflexivity.
-- case_eq s.
-  + intros Hs Hx.
-    reflexivity.
-  + intros n Hs Hx.
-    rewrite Hs in Hinvalid.
-    rewrite Hx in Hinvalid.
-    unfold valid_op in Hinvalid.
-    inversion Hinvalid.
-  + intros n Hs Hx.
-    reflexivity.
-Qed.
+
 
 Theorem filter_valid_ops :
   forall (l : list param) (s : storage),
@@ -899,6 +866,186 @@ case_eq a.
   + reflexivity.
 Qed.
 
+Module Type SigSubProofs.
+  Axiom invalid_is_noop_on_main :
+    forall storage x,
+      valid_op storage x = false -&gt; main_get_storage storage x = storage.
+  
+  Axiom main_preserves_invariant_max :
+    forall (xarg : param)
+         (xstate : storage)
+         (xaux : nat)
+         (Pprev : Pmax xstate xaux)
+         (Hvalid : valid_op xstate xarg = true),
+    Pmax (main_get_storage xstate xarg) (u_max xaux xarg).
+End SigSubProofs.
+
+Module UnitTestMax (SubProofs : SigSubProofs).
+
+Definition invalid_is_noop_on_main := SubProofs.invalid_is_noop_on_main.
+Definition main_preserves_invariant_max := SubProofs.main_preserves_invariant_max.
+</pre>
+      </details>
+
+      <br>
+      We'll walk through the proof of <code>spec_max</code>.
+      <br>
+      As a reminder, here's the definition of <code>spec_max</code> :
+
+      <pre class="code" id="snippet-proof_max-reminder">
+Print spec_max.
+(* spec_max =
+    forall l : list param,
+      Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l)))
+    : Prop *)
+</pre>
+
+      <h3>Step 1 : Decomposing with the proof goal using the fold_invariant_aux lemma</h3>
+
+      Now for the proof, the first part consists essentially in applying the lemma to decompose it into 3 subproofs :
+
+      <pre class="code" id="snippet-proof_max-proof">
+Theorem unit_test_max : spec_max.
+intros l.
+
+unfold list_max.
+rewrite &lt;- fold_symmetric; cycle 1. 
+- intros x y z.
+  rewrite Nat.max_assoc.
+  reflexivity.
+- intros y.
+  rewrite Nat.max_0_l.
+  rewrite Nat.max_0_r.
+  reflexivity.
+- rewrite fold_get_bids.
+  unfold valid_ops'.
+  unfold valid_ops.
+  unfold run_multiple_calls.
+  unfold run_multiple_calls_.
+  apply fold_invariant_aux.
+  + intros state arg Hinvalid.
+    rewrite invalid_is_noop_on_main; auto.
+  + apply main_preserves_invariant_max.
+  + compute; auto.
+Qed.
+</pre>
+
+      <details class="toggle hidden">
+        <summary><em>Proof management detais to start the sub-proofs…</em></summary>
+        <pre class="code" id="snippet-proof_max-subproofs-intermission">
+
+End UnitTestMax.
+
+Module SubProofs &lt;: SigSubProofs.
+</pre>
+      </details>
+
+      <h3>Step 2 : Subproof that invalid transactions don't change the state</h3>
+
+      Property to prove :
+
+      <pre class="code" id="snippet-proof_max-invalid_is_noop_on_main-signature">
+Theorem invalid_is_noop_on_main :
+  forall storage x,
+    valid_op storage x = false -&gt; main_get_storage storage x = storage.</pre>
+
+      The proof consists in a case analysis over the value of the transaction parameter and state.
+
+      The truth table of transaction validity is summarized in the table below :
+
+      <p>
+      <table>
+        <thead>
+          <tr>
+            <th>param \ state</th>
+            <th>Available</th>
+            <th>CurrentBid m<br></th>
+            <th>Sold m</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Bid n</td>
+            <td>true</td>
+            <td>m &lt; n</td>
+            <td>false</td>
+          </tr>
+          <tr>
+            <td>Claim</td>
+            <td>false</td>
+            <td>true</td>
+            <td>false</td>
+          </tr>
+        </tbody>
+        </table>
+      </p>
+
+      And the proof consists essentially in the case analysis with rewrites and unfolds for every case.
+
+      <p>
+      On valid cases, the precondition <code>valid_op storage x = false</code> evaluates to <code>true = false</code>
+      and the <code>inversion</code> tactic is used to prove these cases by contradiction.
+      </p>
+
+      <p>
+      On invalid cases, the postcondition <code>main_get_storage storage x = storage</code> becomes
+      trivial enough so it can be solved using the <code>reflexivity</code> tactic, after expanding
+      some parts of the code.
+      </p>
+
+      <pre class="code" id="snippet-proof_max-invalid_is_noop_on_main-proof">
+intros s x Hinvalid.
+unfold main_get_storage.
+unfold main.
+case_eq x.
+- case_eq s.
+  + intros Hs n Hx.
+    rewrite Hs in Hinvalid.
+    rewrite Hx in Hinvalid.
+    unfold valid_op in Hinvalid.
+    inversion Hinvalid.
+  + intros n Hs n0 Hx.
+    rewrite Hs in Hinvalid.
+    rewrite Hx in Hinvalid.
+    unfold valid_op in Hinvalid.
+    case_eq (n &lt;? n0).
+    * intros Hless.
+      rewrite Hless in Hinvalid.
+      inversion Hinvalid.
+    * intros Hmore.
+      unfold main_option.
+      rewrite Hmore.
+      reflexivity.
+  + intros n Hs n0 Hx.
+    reflexivity.
+- case_eq s.
+  + intros Hs Hx.
+    reflexivity.
+  + intros n Hs Hx.
+    rewrite Hs in Hinvalid.
+    rewrite Hx in Hinvalid.
+    unfold valid_op in Hinvalid.
+    inversion Hinvalid.
+  + intros n Hs Hx.
+    reflexivity.
+Qed.
+
+</pre>
+
+      <h3>Step 3 : Subproof that a call to the contract preserves the invariant</h3>
+
+      For the induction hypothesis, the same strategy applies.
+      <br>
+      It's a case analysis over the parameter and state values,
+      with some preliminary <code>rewrite</code> and <code>unfold</code> on each case.
+      <br>
+      In this proof, we assume that the transaction is valid (if it is invalid, we have already proved that the main function
+      is a no-op). Therefore, the cases for invalid transactions are discarded using <code>inversion</code> on <code>Hvalid</code>.
+      <br>
+      The valid cases are simplified enough so they can be proven by executing as much code as possible, using <code>compute</code>,
+      or by noticing trivial equalities, via <code>reflexivity</code>.
+
+      <pre class="code" id="snippet-proof_max-main_preserves_invariant_max">
 Lemma main_preserves_invariant_max :
   forall (xarg : param)
          (xstate : storage)
@@ -974,265 +1121,17 @@ case_eq xarg.
     reflexivity.
 Qed.
 </pre>
+
+      <details class="toggle hidden">
+        <summary><em>Proof management detais to finish the sub-proofs…</em></summary>
+        <pre class="code" id="snippet-proof_max-subproofs-footer">
+
+End SubProofs.
+Module CompletedUnitTestMax := UnitTestMax SubProofs.
+Definition unit_test_max := CompletedUnitTestMax.unit_test_max.</pre>
       </details>
 
-      <br>
-      We'll walk through the proof of <code>spec_max</code>.
-      <br>
-      As a reminder, here's the definition of <code>spec_max</code> :
-
-      <pre class="code" id="snippet-proof_max-reminder">
-Print spec_max.
-(* spec_max =
-    forall l : list param,
-      Pmax (run_multiple_calls l) (list_max (get_bids (valid_ops' l)))
-    : Prop *)
-</pre>
-
-      <h3>Step 1 : Decomposing with the lemma</h3>
-
-      Now for the proof, the first part consists essentially in applying the lemma to decompose it into 3 subproofs :
-
-      <pre class="code" id="snippet-proof_max-proof">
-Theorem unit_test_max : spec_max.
-intros l.
-
-unfold list_max.
-rewrite &lt;- fold_symmetric; cycle 1. 
-- intros x y z.
-  rewrite Nat.max_assoc.
-  reflexivity.
-- intros y.
-  rewrite Nat.max_0_l.
-  rewrite Nat.max_0_r.
-  reflexivity.
-- rewrite fold_get_bids.
-  unfold valid_ops'.
-  unfold valid_ops.
-  unfold run_multiple_calls.
-  unfold run_multiple_calls_.
-  apply fold_invariant_aux.
-  + intros state arg Hinvalid.
-    rewrite invalid_is_noop_on_main; auto.
-  + apply main_preserves_invariant_max.
-  + compute; auto.
-Qed.
-</pre>
-
-
-      <h3>Step 2 : Subproof that invalid transactions don't change the state</h3>
-
-      Property to prove :
-
-      <pre class="code">
-      Theorem invalid_is_noop_on_main :
-        forall storage x,
-          valid_op storage x = false -> main_get_storage storage x = storage.</pre>
-
-      The proof consists in a case analysis over the value of the transaction parameter and state.
-
-      The truth table of transaction validity is summarized in the table below :
-
-      <p>
-      <table>
-        <thead>
-          <tr>
-            <th>param \ state</th>
-            <th>Available</th>
-            <th>CurrentBid m<br></th>
-            <th>Sold m</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Bid n</td>
-            <td>true</td>
-            <td>m &lt; n</td>
-            <td>false</td>
-          </tr>
-          <tr>
-            <td>Claim</td>
-            <td>false</td>
-            <td>true</td>
-            <td>false</td>
-          </tr>
-        </tbody>
-        </table>
-      </p>
-
-      And the proof consists essentially in the case analysis with rewrites and unfolds for every case.
-
-      <p>
-      On valid cases, the precondition <code>valid_op storage x = false</code> evaluates to <code>true = false</code>
-      and the <code>inversion</code> tactic is used to prove these cases by contradiction.
-      </p>
-
-      <p>
-      On invalid cases, the postcondition <code>main_get_storage storage x = storage</code> becomes
-      trivial enough so it can be solved using the <code>reflexivity</code> tactic, after expanding
-      some parts of the code.
-      </p>
-
-      <pre class="code">
-Theorem invalid_is_noop_on_main :
-  forall storage x,
-    valid_op storage x = false -> main_get_storage storage x = storage.
-intros s x Hinvalid.
-unfold main_get_storage.
-unfold main.
-induction s as [state metadata].
-case_eq x.
-- (* transaction = Bid *)
-  case_eq state.
-  + (* state = Available *)
-    intros Hs n Hx.
-    rewrite Hs in Hinvalid.
-    rewrite Hx in Hinvalid.
-    unfold valid_op in Hinvalid.
-    inversion Hinvalid.
-  + (* state = CurrentBid n *)
-    intros n Hs n0 Hx.
-    rewrite Hs in Hinvalid.
-    rewrite Hx in Hinvalid.
-    unfold valid_op in Hinvalid.
-    unfold contract.state in Hinvalid.
-    case_eq (n <&#63; n0).
-    * intros Hless.
-      rewrite Hless in Hinvalid.
-      inversion Hinvalid.
-    * intros Hmore.
-      unfold main_option.
-      rewrite Hmore.
-      reflexivity.
-  + (* state = Sold n *)
-    intros n Hs n0 Hx.
-    reflexivity.
-- (* transaction = Claim *)
-  case_eq state.
-  + (* state = Available *)
-    intros Hs Hx.
-    reflexivity.
-  + (* state = CurrentBid n *)
-    intros n Hs Hx.
-    case_eq (contract.has_permission_to_claim metadata).
-    * intros permission_ok.
-      rewrite Hs in Hinvalid.
-      rewrite Hx in Hinvalid.
-      unfold valid_op in Hinvalid.
-      unfold contract.metadata in Hinvalid.
-      rewrite permission_ok in Hinvalid.
-      inversion Hinvalid.
-    * intros permission_not_ok.
-      unfold main_option.
-      rewrite permission_not_ok.
-      reflexivity.
-  + (* state = Sold n *)
-    intros n Hs Hx.
-    reflexivity.
-Qed.</pre>
-
-      <h3>Step 3 : Subproof that a call to the contract preserves the invariant</h3>
-
-      For the induction hypothesis, the same strategy applies.
-      <br>
-      It's a case analysis over the parameter and state values,
-      with some preliminary <code>rewrite</code> and <code>unfold</code> on each case.
-      <br>
-      In this proof, we assume that the transaction is valid (if it is invalid, we have already proved that the main function
-      is a no-op). Therefore, the cases for invalid transactions are discarded using <code>inversion</code> on <code>Hvalid</code>.
-      <br>
-      The valid cases are simplified enough so they can be proven by executing as much code as possible, using <code>compute</code>,
-      or by noticing trivial equalities, via <code>reflexivity</code>.
-
-      <pre class="code">
-Lemma main_preserves_invariant_max :
-  forall (xarg : param)
-        (xstorage : storage)
-        (xaux : nat)
-        (Pprev : Pmax xstorage xaux)
-        (Hvalid : valid_op xstorage xarg = true),
-    Pmax (main_get_storage xstorage xarg) (u_max xaux xarg).
-intros xarg xstorage xaux Pprev Hvalid.
-induction xstorage as [ xstate metadata ].
-case_eq xarg.
-- (* transaction = Bid *)
-  case_eq xstate.
-  * (* state = Available *)
-    intros Hstate n Harg.
-    cut (xaux = 0).
-    + (* xaux = 0 *)
-      intros Haux.
-      unfold u_max.
-      rewrite Haux.
-      rewrite Nat.max_0_r.
-      compute.
-      auto.
-    + (* xaux != 0 *)
-      unfold Pmax in Pprev.
-      rewrite Hstate in Pprev.
-      assumption.
-  * (* state = CurrentBid n *)
-    intros n Hstate n0 Harg.
-    rewrite Hstate in Hvalid.
-    rewrite Harg in Hvalid.
-    unfold valid_op in Hvalid.
-    unfold Pmax in Pprev.
-    rewrite Hstate in Pprev.
-    unfold main_get_storage.
-    unfold u_max.
-    unfold main.
-    unfold main_option.
-    unfold contract.state in Hvalid.
-    rewrite Hvalid.
-    rewrite <- Pprev.
-    unfold snd.
-    unfold Pmax.
-    rewrite Nat.max_comm.
-    rewrite Nat.max_r.
-    + reflexivity.
-    + apply Nat.leb_le in Hvalid.
-      lia.
-  * (* state = Sold n *)
-    intros n Hstate n0 Harg.
-    rewrite Hstate in Hvalid.
-    rewrite Harg in Hvalid.
-    unfold valid_op in Hvalid.
-    inversion Hvalid.
-- (* transaction = Claim *)
-  case_eq xstate.
-  * (* state = Available *)
-    intros Hstate Harg.
-    rewrite Hstate, Harg in Hvalid.
-    unfold valid_op in Hvalid.
-    inversion Hvalid.
-  * (* state = CurrentBid n *)
-    intros n Hstate Harg.
-    unfold main_get_storage.
-    unfold u_max.
-    unfold main.
-    unfold main_option.
-    unfold snd.
-    unfold Pmax.
-    rewrite Hstate in Pprev.
-    unfold Pmax in Pprev.
-    rewrite Pprev in *.
-    case_eq (contract.has_permission_to_claim metadata); reflexivity.
-  * (* state = Sold n *)
-    intros n Hstate Harg.
-    unfold main_get_storage.
-    unfold u_max.
-    unfold main.
-    unfold main_option.
-    unfold fail_in_main.
-    unfold snd.
-    unfold Pmax.
-    rewrite Hstate in Pprev.
-    unfold Pmax in Pprev.
-    rewrite Pprev in *.
-    reflexivity.
-Qed.</pre>
-
-      Here is it for the proof of <code>spec_max</code>.
+      Aside from some simple auxiliary lemmas, the proof of <code>spec_max</code> is now done.
       <br>
       Proofs for other theorems will often follow the same strategy :
       <ul>
@@ -1321,7 +1220,14 @@ Extract Inlined Constant ltb =&gt; &quot;(fun (a : nat) (b : nat) : bool -&gt; a
 Unset Extraction AccessOpaque.
 </pre>
       </details>
-      Checking assumptions:
+      
+      Before doing that, however, we will check the assumptions made in these proofs,
+      i.e. the axioms and LIGO built-in opaque functions that have been used. In this
+      case, the only "axioms" used are the LIGO built-in function <code>transaction</code>,
+      the LIGO built-in types <code>operation</code> and <code>mutez</code>, as well as
+      <code>destination_account</code> which is a thin wrapper around the LIGO built-in
+      <code>Tezos.get_sender</code>.
+
       <pre class="code" id="snippet-extract-print-assumptions">
 Definition checkAssumptions := (main, unit_test_max).
 Print Assumptions checkAssumptions.
@@ -1333,7 +1239,14 @@ mutez  : nat → tez
 destination_account  : contract unit
 *)
 </pre>
-      Extracting the code:
+
+      We now know that our proven program relies on the correct specification of its tests
+      (e.g. <code>spec_max</code>), and on the correct implementation of these LIGO built-ins,
+      as well as the correct implementation of the LIGO language itself and of the thin OCaml
+      → CameLIGO translation step. This means that aside from these fragments, we have not
+      used some unproven axiom in our proof of correctness for the spec_max specification.
+
+      We can now extract the code:
       <pre class="code" id="snippet-extract-extraction">
 (* Compile Coq code to OCaml *)
 Extraction &quot;contract.1.ocaml.ml&quot; main.
