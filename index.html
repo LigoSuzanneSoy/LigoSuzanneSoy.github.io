@@ -22,7 +22,14 @@
   <script src="node_modules/wacoq/ui-js/jscoq-loader.js"></script>
   <main id="page">
     <article id="tutorial">
-      <h1 class="libtitle">Formally Proven Smart Contract Tutorial</h1>
+      <header>
+        <h1 class="libtitle">Formally Proven Smart Contract Tutorial</h1>
+        <address>
+          By <a rel="author" href="https://suzanne.soy">Suzanne Soy</a>
+          and <a rel="author" href="mailto:nicolas.van.phan@gmail.com">Nicolas Phan</a>
+          for <a href="https://ligolang.org">LIGO</a>.
+        </address>
+      </header>
       <section>
         <h1>Introduction</h1>
         <p>This tutorial will show how to write a very simple auction smart contract in Coqueligot,
@@ -1226,7 +1233,8 @@ Unset Extraction AccessOpaque.
       case, the only "axioms" used are the LIGO built-in function <code>transaction</code>,
       the LIGO built-in types <code>operation</code> and <code>mutez</code>, as well as
       <code>destination_account</code> which is a thin wrapper around the LIGO built-in
-      <code>Tezos.get_sender</code>.
+      <code>Tezos.get_sender</code>. This can take some time as some of the Coq standard
+      library proofs need to be downloaded in order to check their own assumptions.
 
       <pre class="code" id="snippet-extract-print-assumptions">
 Definition checkAssumptions := (main, unit_test_max).
@@ -1255,6 +1263,8 @@ Extraction &quot;contract.1.ocaml.ml&quot; main.
       <textarea readonly="true" id="extracted">
         (* Extracted code will appear here *)
       </textarea>
+      This code can then be copy-pasted into an OCaml project on <a href="https://ide.ligolang.org/">the LIGO WebIDE</a>,
+      and deployed to the Tezos blockchain.
     </section>
 
     <section>
@@ -1297,9 +1307,8 @@ Extraction &quot;contract.1.ocaml.ml&quot; main.
       <section>
         <h1>Further reading</h1>
         <ul>
-          <li>Software Foundations (jscoq version)</li>
-          <li>CPDT</li>
-          <li>etc. TODO</li>
+          <li><a href="https://jscoq.github.io/ext/sf/lf/full/toc.html">Software Foundations</a></li>
+          <li><a href="http://adam.chlipala.net/cpdt/html/toc.html">Certified Programming with Dependent Types</a>></li>
         </ul>
       </section>
     </article>
