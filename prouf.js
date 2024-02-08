@@ -166,7 +166,16 @@ var prouf = (function(waitJsCoqLoaded) {
   };
 
   _.get_file = function(path, callback) {
-    coq.coq.worker.onmessage = function(x) { callback(x.data[1], x.data[2]); }
+    var oldOnMessage = coq.coq.worker.onmessage;
+    var f = function(x) {
+      if (x.data && x.data.length >= 3 && x.data[0] == 'Got' && x.data[1] == path && x.data[2]) {
+        callback(x.data[1], x.data[2]);
+        if (coq.coq.worker.onmessage == f) {
+          coq.coq.worker.onmessage = oldOnMessage;
+        }
+      }
+    }
+    coq.coq.worker.onmessage = f;
     coq.coq.sendDirective(['Get', path])
   };
 
@@ -1347,6 +1356,15 @@ var prouf = (function(waitJsCoqLoaded) {
     prouf.cmExtracted = CodeMirror.fromTextArea(document.getElementById('extracted'), {
       mode:  "mllike",
       readOnly: true,
+      lineNumbers       : true,
+      indentUnit        : 2,
+      tabSize           : 2,
+      indentWithTabs    : false,
+      //matchBrackets     : true,
+      styleSelectedText : true,
+      //dragDrop          : false,
+      //keyMap            : "jscoq",
+      //className         : "jscoq"
     });
 
     _.my_init();
@@ -1380,6 +1398,8 @@ var prouf = (function(waitJsCoqLoaded) {
     var l = line - cm.editor.options.firstLineNumber;
     cm.editor.setCursor({ line: l, ch: cm.editor.getLine(l).length });
     coq.provider.currentFocus = cm;
+
+    $('#extractButton').on('click', () => prouf.extractButtonClicked());
 
     var old_scroll = {y:$('main')[0].scrollTop, x:$('main')[0].scrollLeft}; // cm.editor.focus accidentally scrolls
     cm.editor.focus();
@@ -1567,6 +1587,50 @@ var prouf = (function(waitJsCoqLoaded) {
     //console.log('circ_', 'prouf.test');
     //prouf.sentenceToActions(prouf.getNextSentence());
     //_.removeCirc(c)
+  };
+
+  prouf.oCamlToCameLIGO = function(str) {
+    var unique_names = ['param12345'];
+    var stdlib = 'let mutez_of_nat x = 1mutez * x';
+    var default_entrypoint = '[@entry] let default (param : param) (storage : storage) = main (param, storage)';
+
+    return '' +
+     stdlib + '\n' +
+     str.replace('function', 'fun ' + unique_names[0] + ' -> match ' + unique_names[0] + ' with') + '\n' +
+     default_entrypoint;
+  };
+
+  prouf.extractButtonClicked = function() {
+    debugger;
+    var cm = $('#snippet-extract-extraction')[0].CodeMirror;
+    var sp = coq.provider.snippets.find(spi => spi.editor == cm);
+    coq.provider.currentFocus = sp
+    cm.focus()
+    cm.setCursor({line: cm.lineCount(), ch: cm.getLine(cm.lineCount() - 1).length})
+
+    // This function returns synchronously after having added the sentences
+    coq.goCursor();
+
+    var sts = coq.doc.sentences.filter(st => st.sp == sp);
+    var st = sts[sts.length-1];
+    // TODO: use coqActivityUIFeedback instead of setInterval.
+    var ival = window.setInterval(function() {
+      console.log(st.phase);
+      if (st.phase == 'processed') {
+        window.clearInterval(ival);
+        prouf.get_file_string('/home/contract.1.ocaml.ml', (f,v) =>
+          prouf.cmExtracted.setValue(
+            prouf.oCamlToCameLIGO(v)));
+      }
+    }, 500);
+
+    /*[coq.goCursor(), coq.doc.sentences[coq.doc.sentences.length-1], coq.doc.sentences[coq.doc.sentences.length-1].phase]
+
+    //var st = coq.doc.sentences[coq.doc.sentences.length]; // TODO
+    var ed = st.sp.editor;
+    previousCm == ed; // true
+    st.phase == 'processed'
+    */
   };
   
   return _;
